@@ -24,7 +24,7 @@ pre{background:#eef1f5;padding:8px;border-radius:8px;white-space:pre-wrap;direct
 <button id="login">دخول</button><button id="sum" disabled>notifications.summary</button><pre id="apiOut">—</pre></section>
 <section><h2>4) التثبيت ودون إنترنت</h2><div id="inst">—</div><button id="install" hidden>تثبيت التطبيق</button>
 <p>بعد التثبيت: فعّل وضع الطيران وافتح التطبيق؛ يجب أن تظهر هذه الصفحة.</p></section>
-<section><h2>5) الإشعارات</h2><button id="push">تفعيل الإشعارات</button><pre id="pushOut">—</pre></section>
+<section><h2>5) الإشعارات</h2><button id="push">تفعيل الإشعارات</button><button id="ptest" disabled>إرسال إشعار تجريبي لي</button><pre id="pushOut">—</pre></section>
 <script src="firebase-config.js"></script>
 <script>
 const $=id=>document.getElementById(id), LS=localStorage;
@@ -45,13 +45,15 @@ $('inst').textContent=(matchMedia('(display-mode: standalone)').matches?'يعم�
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
 $('push').onclick=async()=>{const o=$('pushOut');
   try{
-    if(!self.FB_CONFIG||!self.FB_CONFIG.apiKey){o.textContent='firebase-config.js فارغ بعد';return}
+    if(!self.FB_CONFIG||!self.FB_CONFIG.apiKey||!self.FB_VAPID){o.textContent='firebase-config.js فارغ بعد';return}
     if(!('Notification' in window)){o.textContent='المتصفح لا يدعم الإشعارات (على آيفون: أضف التطبيق للشاشة الرئيسية أولًا)';return}
     const perm=await Notification.requestPermission(); if(perm!=='granted'){o.textContent='تم رفض الإذن';return}
     const load=s=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=s;e.onload=res;e.onerror=rej;document.head.appendChild(e)});
     await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
     firebase.initializeApp(self.FB_CONFIG);const reg=await navigator.serviceWorker.ready;
     const tk=await firebase.messaging().getToken({vapidKey:self.FB_VAPID,serviceWorkerRegistration:reg});
-    o.textContent='رمز الجهاز:\n'+tk;
+    if(!token){o.textContent='سجّل الدخول (القسم 3) ثم أعد المحاولة';return}
+    const rg=await call('push.register',{token:tk});o.textContent=rg.ok?('تم تسجيل الجهاز ✔ عدد الأجهزة: '+rg.data.devices):('فشل التسجيل: '+rg.message);$('ptest').disabled=!rg.ok;
   }catch(e){o.textContent='خطأ: '+e.message}};
+$('ptest').onclick=async()=>{const o=$('pushOut');o.textContent='جارٍ الإرسال…';try{const j=await call('push.test');o.textContent=j.ok?('أُرسل إلى '+j.data.sent+' جهاز — انتظر الإشعار'):('فشل: '+j.message)}catch(e){o.textContent='خطأ: '+e.message}};
 </script></main></body></html>
