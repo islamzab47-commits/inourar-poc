@@ -53,9 +53,16 @@ $('push').onclick=async()=>{const o=$('pushOut');
     const load=s=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=s;e.onload=res;e.onerror=rej;document.head.appendChild(e)});
     await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
     firebase.initializeApp(self.FB_CONFIG);const reg=await navigator.serviceWorker.ready;
+    firebase.messaging().onMessage(p=>{const d=p.data||{};reg.showNotification(d.title||'INOURAR',{body:d.body||'',icon:'icon-192.png'});$('pushOut').textContent='وصل إشعار والتطبيق مفتوح ✔ '+(d.body||'')});
     const tk=await firebase.messaging().getToken({vapidKey:self.FB_VAPID,serviceWorkerRegistration:reg});
     if(!token){o.textContent='سجّل الدخول (القسم 3) ثم أعد المحاولة';return}
     const rg=await call('push.register',{token:tk});o.textContent=rg.ok?('تم تسجيل الجهاز ✔ عدد الأجهزة: '+rg.data.devices):('فشل التسجيل: '+rg.message);$('ptest').disabled=!rg.ok;
   }catch(e){o.textContent='خطأ: '+e.message}};
-$('ptest').onclick=async()=>{const o=$('pushOut');o.textContent='جارٍ الإرسال…';try{const j=await call('push.test');o.textContent=j.ok?('أُرسل إلى '+j.data.sent+' جهاز — انتظر الإشعار'):('فشل: '+j.message)}catch(e){o.textContent='خطأ: '+e.message}};
+(async()=>{try{if(!self.FB_CONFIG||!self.FB_VAPID||!('Notification' in window)||Notification.permission!=='granted'||!('serviceWorker' in navigator))return;
+  const load=s=>new Promise((res,rej)=>{const e=document.createElement('script');e.src=s;e.onload=res;e.onerror=rej;document.head.appendChild(e)});
+  await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');await load('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
+  firebase.initializeApp(self.FB_CONFIG);const reg=await navigator.serviceWorker.ready;
+  firebase.messaging().onMessage(p=>{const d=p.data||{};reg.showNotification(d.title||'INOURAR',{body:d.body||'',icon:'icon-192.png'});$('pushOut').textContent='وصل إشعار والتطبيق مفتوح ✔ '+(d.body||'')});
+  $('ptest').disabled=false;}catch(e){}})();
+$('ptest').onclick=async()=>{const o=$('pushOut');o.textContent='جارٍ الإرسال…';try{const j=await call('push.test');o.textContent=j.ok?('أُرسل إلى '+j.data.sent+' جهاز. أقفل الشاشة أو اخرج من التطبيق وانتظر 10 ثوانٍ'):('فشل: '+j.message)}catch(e){o.textContent='خطأ: '+e.message}};
 </script></main></body></html>
