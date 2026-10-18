@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.17.0"></script>
+<script src="config.js?v=0.17.2"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.17.0">
+<link rel="stylesheet" href="fonts.css?v=0.17.2">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -707,16 +707,16 @@ details.more>*+*{margin-top:10px}
   function saveMe() { if (state.token && state.user) lsSetJ(ME_KEY, { token: state.token, user: state.user, roleLabel: state.roleLabel, build: state.build }); }
   function loadMe() { var m = lsGetJ(ME_KEY); return (m && m.token && m.user && m.token === state.token) ? m : null; }
   function cacheKey() { return CACHE_PREFIX + (state.user ? state.user.id : ''); }
-  function loadCache() { var c = lsGetJ(cacheKey()); cache = (c && typeof c === 'object') ? c : {}; }
+  function loadCache() { var c = lsGetJ(cacheKey()); cache = (c && typeof c === 'object') ? c : {}; stale = {}; }
   var cacheTimer = null;
   function saveCacheSoon() {
     if (!state.user) return;
     clearTimeout(cacheTimer);
     cacheTimer = setTimeout(function () {
       if (!state.user) return;
-      var out = {}, size = 0, keys = Object.keys(cache);
+      var all = Object.assign({}, stale, cache), out = {}, size = 0, keys = Object.keys(all);
       for (var i = keys.length - 1; i >= 0; i--) {                    // الأحدث أولًا
-        var v = cache[keys[i]];
+        var v = all[keys[i]];
         if (typeof v !== 'string' || v.length > CACHE_ENTRY_MAX || size + v.length > CACHE_MAX) continue;
         out[keys[i]] = v; size += v.length;
       }
@@ -848,6 +848,8 @@ details.more>*+*{margin-top:10px}
 
   /* ---------- كاش القراءة (يُظهر الشاشة فورًا ثم يحدّثها بصمت إن تغيّرت البيانات) ---------- */
   var cache = {};       // key -> JSON
+  var stale = {};       // نسخ قديمة بعد أي تعديل: لا تُعرض والاتصال متاح، لكنها تُنقذ الشاشة عند انقطاع الإنترنت
+  function invalidate() { stale = Object.assign(stale, cache); cache = {}; }
   var watch = {};       // الطلبات التي قرأتها الشاشة الحالية (للتحديث الدوري)
   var inflight = {};
   var NEUTRAL = { me: 1, logout: 1, 'ui.quotes': 1, 'push.register': 1, 'push.unregister': 1, 'push.test': 1 };
@@ -884,14 +886,44 @@ details.more>*+*{margin-top:10px}
     }
     var mode = opts.mode || (forceQuiet ? 'quiet' : 'full');
     return call('rpc', [state.token, action, payload], mode).then(function (data) {
-      if (canCache) { cache[key] = JSON.stringify(data); watch[key] = { action: action, payload: payload }; saveCacheSoon(); }
-      else if (!NEUTRAL[action]) { cache = {}; saveCacheSoon(); if (/^transfers\./.test(action)) setTimeout(function () { pollNotif(); }, 300); }      // أي تعديل يبطل الكاش كله
+      if (canCache) { delete stale[key]; cache[key] = JSON.stringify(data); watch[key] = { action: action, payload: payload }; saveCacheSoon(); }
+      else if (!NEUTRAL[action]) { invalidate(); saveCacheSoon(); warmSoon(8000); if (/^transfers\./.test(action)) setTimeout(function () { pollNotif(); }, 300); }      // أي تعديل يبطل الكاش كله
       return data;
     }).catch(function (err) {
       if (err.code === 'AUTH_REQUIRED') { endSession(err.message); }
+      if (!err.code && canCache) {                       // انقطاع الشبكة: نعرض آخر نسخة محفوظة بدل الخطأ
+        var old = cache[key] !== undefined ? cache[key] : stale[key];
+        if (old !== undefined) return JSON.parse(old);
+      }
       throw err;
     });
   }
+
+  /* تسخين الكاش: بعد الدخول نجلب بصمت ما تحتاجه الشاشات الأساسية، فتعمل كلها حتى دون إنترنت */
+  var warmTimer = null;
+  function warmList() {
+    var u = state.user; if (!u || u.role === 'CLIENT') return [];
+    var adm = u.role === 'DG' || u.role === 'RESP';
+    var l = [['charges.options', {}], ['charges.list', {}], ['caisses.summary', {}], ['transfers.list', {}]];
+    if (!adm) l.push(['caisses.movements', { caisse: u.id }]);
+    else l.push(['projects.options', {}], ['projects.list', {}], ['versements.list', {}]);
+    return l;
+  }
+  function warmSoon(ms) {
+    clearTimeout(warmTimer);
+    warmTimer = setTimeout(function () {
+      if (!state.user || navigator.onLine === false) return;
+      var list = warmList(), i = 0;
+      (function next() {
+        if (!state.user || i >= list.length) return;
+        var a = list[i++][0], pl = list[i - 1][1], key = a + '|' + JSON.stringify(pl);
+        call('rpc', [state.token, a, pl], 'silent').then(function (d) { delete stale[key]; cache[key] = JSON.stringify(d); saveCacheSoon(); })
+          .catch(function (e) { if (e && e.code === 'AUTH_REQUIRED') endSession(e.message); })
+          .then(function () { setTimeout(next, 150); });
+      })();
+    }, ms || 1500);
+  }
+  window.addEventListener('online', function () { warmSoon(1500); });
 
   // تسجّله الشاشة الحالية: ما الذي يُعاد رسمه عند التحديث (يدويًا أو عند تغيّر البيانات)
   function refresher(fn) { state.refresh = fn; watch = {}; }
@@ -906,7 +938,7 @@ details.more>*+*{margin-top:10px}
 
   function manualRefresh() {
     var btn = $('refreshBtn');
-    cache = {};
+    invalidate();
     btn.classList.add('spin');
     setTimeout(function () { btn.classList.remove('spin'); }, 900);
     if (state.refresh) { state.refresh(false); return; }
@@ -928,7 +960,7 @@ details.more>*+*{margin-top:10px}
   }
 
   function endSession(msg) {
-    state.token = null; state.user = null; state.refresh = null; state.module = null; cache = {}; watch = {};
+    state.token = null; state.user = null; state.refresh = null; state.module = null; cache = {}; stale = {}; watch = {}; clearTimeout(warmTimer);
     notif = { pending: { count: 0, amount: 0 }, decided: [] };
     storeSet(null); clearTimeout(cacheTimer); purgeStored();
     $('moduleBody').textContent = '';
@@ -1239,7 +1271,7 @@ details.more>*+*{margin-top:10px}
     if (saved) {
       // تشغيل فوري من بيانات الجهاز (يعمل دون إنترنت)، ثم نتحقق من الجلسة بصمت
       state.user = saved.user; state.roleLabel = saved.roleLabel; state.build = saved.build || '';
-      loadCache(); renderApp();
+      loadCache(); renderApp(); warmSoon(2500);
       rpc('me', {}, { mode: 'silent' }).then(function (data) {
         if (!state.user) return;
         var changed = JSON.stringify(data.user) !== JSON.stringify(state.user) || data.roleLabel !== state.roleLabel;
@@ -1250,7 +1282,7 @@ details.more>*+*{margin-top:10px}
     }
     rpc('me').then(function (data) {
       state.user = data.user; state.roleLabel = data.roleLabel; state.build = data.build || '';
-      saveMe(); loadCache(); renderApp();
+      saveMe(); loadCache(); renderApp(); warmSoon(2500);
     }).catch(function (err) {
       if (err.code !== 'AUTH_REQUIRED') { endSession(err.message); }
     });
@@ -1270,7 +1302,7 @@ details.more>*+*{margin-top:10px}
         $('loginPass').value = '';
         return rpc('me');
       })
-      .then(function (me) { state.roleLabel = me.roleLabel; state.build = me.build || ''; saveMe(); loadCache(); renderApp(); })
+      .then(function (me) { state.roleLabel = me.roleLabel; state.build = me.build || ''; saveMe(); loadCache(); renderApp(); warmSoon(2500); })
       .catch(function (err) { showLoginError(err.message); })
       .then(function () { btn.disabled = false; btn.textContent = 'دخول'; });
   });
@@ -2736,9 +2768,19 @@ details.more>*+*{margin-top:10px}
     I.rpc('charges.createBatch', { lines: grp.map(function (q) { return q.line; }), ref: bref }, { mode: 'silent' }).then(function (r) {
       grp.forEach(function (q, i) { q.status = 'ok'; q.id = r.items[i] ? r.items[i].id : ''; q.err = ''; });
       if (QV.saved) QV.saved(r);
-      if (r.balances.some(function (x) { return x.balance < 0; })) I.toast('تنبيه: رصيد الصندوق سالب', 'error', 5000);
+      if (I.user() && (I.user().role === 'DG' || I.user().role === 'RESP') && r.balances.some(function (x) { return x.balance < 0; })) I.toast('تنبيه: رصيد الصندوق سالب', 'error', 5000);
     }).catch(function (e) {
       var net = !e.code;                    // لا رمز = انقطاع اتصال: نعيد المحاولة تلقائيًا
+      if (!net && e.code !== 'AUTH_REQUIRED' && grp.length > 1) {
+        // الخادم يرفض الدفعة كلها (لم يُحفظ شيء). نعزل السطر المعيب برقمه، ونُعيد البقية بدفعة جديدة فلا يتعطل غيره
+        var m = /^السطر (\d+): ?([\s\S]*)$/.exec(e.message || ''), bad = m ? grp[Number(m[1]) - 1] : null, nb = newRef();
+        grp.forEach(function (q) {
+          if (q === bad) { q.status = 'err'; q.fatal = true; q.err = m[2]; q.bref = null; }
+          else { q.status = 'pending'; q.bref = bad ? nb : newRef(); }       // رقم السطر غير معروف: كل سطر يُرسل وحده ليتبيّن المعيب
+        });
+        if (bad) I.toast('تعذّر حفظ سطر: ' + m[2], 'error', 6000);
+        return;
+      }
       grp.forEach(function (q) {
         q.tries = (q.tries || 0) + 1; q.err = e.message || 'تعذّر الحفظ';
         if (e.code === 'AUTH_REQUIRED') { q.status = 'pending'; again = false; }
@@ -3710,6 +3752,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.17.0"></script>
+<script src="pwa.js?v=0.17.2"></script>
 </body>
 </html>
