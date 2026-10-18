@@ -33,7 +33,9 @@ $('save').onclick=()=>{LS.setItem('srv',$('url').value.trim());alert('تم')};
 async function call(action,payload){
   const t0=performance.now();
   const r=await fetch($('url').value.trim(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token,payload:payload||{}})});
-  const j=await r.json(); j._ms=Math.round(performance.now()-t0); return j;
+  const tx=await r.text(); let j;
+  try{j=JSON.parse(tx)}catch(e){throw new Error('HTTP '+r.status+' — رد غير JSON: '+tx.replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,300))}
+  j._ms=Math.round(performance.now()-t0); return j;
 }
 $('ping').onclick=async()=>{const o=[];try{for(let i=0;i<5;i++){const j=await call('ping');o.push((i+1)+': '+(j.ok?'ok':'fail')+' '+j._ms+' ms')}}catch(e){o.push('خطأ: '+e.message)}$('pingOut').textContent=o.join('\n')};
 $('login').onclick=async()=>{try{const j=await call('login',{username:$('u').value,password:$('p').value});
