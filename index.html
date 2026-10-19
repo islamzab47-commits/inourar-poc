@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.18.1"></script>
+<script src="config.js?v=0.18.2"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.18.1">
+<link rel="stylesheet" href="fonts.css?v=0.18.2">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -440,6 +440,7 @@ details.more>*+*{margin-top:10px}
 .hero-ing{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .big-card{display:flex;flex-direction:column;gap:4px;text-align:start;font:inherit;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 18px;box-shadow:var(--shadow)}
 .big-card .t{font-size:14px;color:var(--muted,#6b5f5a)}.big-card .v{font-size:24px;font-weight:800;direction:ltr;unicode-bidi:isolate;text-align:start}
+.big-card .hint{font-size:12px;color:var(--muted,#6b5f5a);margin-top:2px}
 .big-card.in .v{color:#1c7a3a}.big-card.out .v{color:var(--orange-d)}
 .act-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.act-row .btn{padding:14px;font-size:16px}
 .balline{grid-column:1/-1;text-align:center;font-weight:700}
@@ -1924,13 +1925,9 @@ details.more>*+*{margin-top:10px}
     return h('section', {}, [
       noticeBox(),
       h('div', { class: 'hero-ing' }, [
-        h('button', { type: 'button', class: 'big-card in', onclick: function () { go('mine'); } }, [h('span', { class: 't', text: 'المداخيل (المستلم)' }), h('span', { class: 'v', text: I.ui.money(d.mine.received) })]),
-        h('button', { type: 'button', class: 'big-card out', onclick: function () { go('mine'); } }, [h('span', { class: 't', text: 'المصاريف' }), h('span', { class: 'v', text: I.ui.money(d.mine.spent) })]),
+        h('button', { type: 'button', class: 'big-card in', onclick: function () { go('mine', 'request'); } }, [h('span', { class: 't', text: 'المداخيل (المستلم)' }), h('span', { class: 'v', text: I.ui.money(d.mine.received) }), h('span', { class: 'hint', text: '+ اضغط لطلب مبلغ' })]),
+        h('button', { type: 'button', class: 'big-card out', onclick: function () { go('charges'); } }, [h('span', { class: 't', text: 'المصاريف' }), h('span', { class: 'v', text: I.ui.money(d.mine.spent) }), h('span', { class: 'hint', text: '+ اضغط لإضافة مصروف' })]),
         h('div', { class: 'balline' }, ['رصيد صندوقي: ', h('span', { class: d.mine.balance < 0 ? 'neg' : '', text: I.ui.money(d.mine.balance) + ' دج' })])
-      ]),
-      h('div', { class: 'act-row' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost', text: '+ طلب مبلغ', onclick: function () { go('mine', 'request'); } }),
-        h('button', { type: 'button', class: 'btn btn-primary', text: '+ مصروف', onclick: function () { go('charges'); } })
       ])
     ]);
   }
@@ -3822,6 +3819,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.18.1"></script>
+<script src="pwa.js?v=0.18.2"></script>
 </body>
 </html>
