@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.17.3"></script>
+<script src="config.js?v=0.18.1"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.17.3">
+<link rel="stylesheet" href="fonts.css?v=0.18.1">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -414,6 +414,7 @@ details.more>*+*{margin-top:10px}
 .pair{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pair>*{min-width:0}
 .inl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.inl .lbl{font-size:13px;font-weight:700}.inl small{flex-basis:100%}
 .qtyblock,.extra{display:flex;flex-direction:column;gap:8px}
+.morebox{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px dashed var(--line);border-radius:12px}.morebox[hidden]{display:none}.morebtn{align-self:flex-start}.rcpt{display:block}
 .panel .ph{flex-wrap:wrap;justify-content:flex-start}.panel .ph .chips{margin-inline-start:auto}
 .inl .pill{padding:4px 10px;font-size:13px}.pill.ico{width:38px;height:38px;font-size:18px;border-radius:12px}
 .panel{padding:12px;gap:8px}.fgroup{gap:8px}.form-grid{gap:8px}
@@ -900,7 +901,7 @@ details.more>*+*{margin-top:10px}
   }
 
   /* تسخين الكاش: بعد الدخول نجلب بصمت ما تحتاجه الشاشات الأساسية، فتعمل كلها حتى دون إنترنت */
-  var warmTimer = null;
+  var warmTimer = null, warmWaits = 0;
   function warmList() {
     var u = state.user; if (!u || u.role === 'CLIENT') return [];
     var adm = u.role === 'DG' || u.role === 'RESP';
@@ -913,6 +914,8 @@ details.more>*+*{margin-top:10px}
     clearTimeout(warmTimer);
     warmTimer = setTimeout(function () {
       if (!state.user || navigator.onLine === false) return;
+      if (loadState.n > 0 && (warmWaits = (warmWaits || 0) + 1) < 12) { warmSoon(1500); return; }     // لا نزاحم الشاشة التي يفتحها المستخدم الآن
+      warmWaits = 0;
       var list = warmList(), i = 0;
       (function next() {
         if (!state.user || i >= list.length) return;
@@ -2052,7 +2055,8 @@ details.more>*+*{margin-top:10px}
       }
 
       function toggleItem(item) {
-        I.rpc('lists.update', { id: item.id, active: !item.active }).then(replaceItem).catch(fail);
+        replaceItem(Object.assign({}, item, { active: !item.active }));
+        I.rpc('lists.update', { id: item.id, active: !item.active }, { mode: 'quiet' }).then(replaceItem).catch(function (e) { replaceItem(item); fail(e); });
       }
 
       function renderRows() {
@@ -2075,6 +2079,29 @@ details.more>*+*{margin-top:10px}
         });
       }
 
+      function pasteList() {
+        var ta = h('textarea', { rows: '10', placeholder: 'ألصق هنا نصًّا من ملف (Excel أو Word أو ملاحظات)، كل عنصر في سطر.\nمثال:\nإسمنت\nحديد 12\nرمل', style: 'width:100%' });
+        var info = h('div', { class: 'muted' });
+        var upd = function () {
+          var n = ta.value.split(/\r?\n|\t|؛|;/).filter(function (x) { return x.trim(); }).length;
+          info.textContent = n ? ('عدد الأسطر: ' + n + ' — المكرَّر والموجود مسبقًا يُتجاهل') : 'الحد الأقصى 1000 سطر في المرة';
+        };
+        ta.oninput = upd; upd();
+        var title = (state.defs.filter(function (d) { return d.key === state.current; })[0] || {}).title || '';
+        I.modal({
+          title: 'لصق قائمة في «' + title + '»',
+          content: h('div', {}, [ta, info]),
+          submitLabel: 'إضافة العناصر',
+          onSubmit: function () {
+            return I.rpc('lists.addMany', { list: state.current, text: ta.value }).then(function (r) {
+              r.added.forEach(function (it) { state.items.push(it); });
+              renderRows(); refreshDefs();
+              I.toast('أُضيف ' + r.added.length + ' عنصرًا' + (r.skipped ? ' — تُجوهل ' + r.skipped + ' مكرَّرًا' : '') + (r.tooLong ? ' — ' + r.tooLong + ' سطرًا أطول من 120 حرفًا' : ''));
+            });
+          }
+        });
+      }
+
       function renderArea() {
         area.textContent = '';
         var search = h('input', {
@@ -2093,8 +2120,9 @@ details.more>*+*{margin-top:10px}
           }
         }, [addInput, h('button', { class: 'btn btn-primary', type: 'submit', text: 'إضافة' })]);
 
+        var pasteBtn = h('button', { type: 'button', class: 'btn btn-ghost', text: '📋 لصق قائمة', onclick: pasteList });
         tbody = h('tbody', {});
-        area.appendChild(h('div', { class: 'toolbar' }, [search]));
+        area.appendChild(h('div', { class: 'toolbar' }, [search, pasteBtn]));
         area.appendChild(addForm);
         area.appendChild(h('div', { class: 'table-wrap' }, [
           h('table', {}, [
@@ -2165,24 +2193,35 @@ details.more>*+*{margin-top:10px}
 
       function openForm(c) {
         var isNew = !c;
-        c = c || { name: '', phone: '', whatsapp: '', address: '', notes: '' };
-        var name = h('input', { type: 'text', value: c.name, maxlength: '120', required: true });
-        var phone = h('input', { type: 'tel', value: c.phone, placeholder: '0550123456', required: true });
-        var wa = h('input', { type: 'tel', value: c.whatsapp, placeholder: 'اختياري' });
+        c = c || { kind: 'PERSON', first_name: '', last_name: '', company_name: '', nickname: '', phone: '', whatsapp: '', address: '', notes: '' };
+        var company = h('input', { type: 'text', value: c.company_name, maxlength: '120' });
+        var first = h('input', { type: 'text', value: c.first_name, maxlength: '60', placeholder: 'Kacem', dir: 'ltr', autocapitalize: 'words', required: true });
+        var last = h('input', { type: 'text', value: c.last_name, maxlength: '60', placeholder: 'Rai', dir: 'ltr', autocapitalize: 'words', required: true });
+        var wa = h('input', { type: 'tel', value: c.whatsapp, placeholder: '0550123456', dir: 'ltr', required: true });
+        var phone = h('input', { type: 'tel', value: c.phone, placeholder: 'اختياري', dir: 'ltr' });
+        var nick = h('input', { type: 'text', value: c.nickname, maxlength: '60', placeholder: 'اختياري' });
         var addr = h('input', { type: 'text', value: c.address, maxlength: '200' });
         var notes = h('textarea', { maxlength: '500', value: c.notes });
+        var companyFld = I.field('اسم الشركة *', company);
+        var typeBox = I.ui.chips([{ id: 'PERSON', label: 'زبون' }, { id: 'COMPANY', label: 'شركة' }], c.kind === 'COMPANY' ? 'COMPANY' : 'PERSON', function () { paintKind(); });
+        function paintKind() { var co = typeBox.get() === 'COMPANY'; companyFld.hidden = !co; company.required = co; }
         var content = h('div', { class: 'login-card', style: 'gap:12px;max-width:none' }, [
-          I.field('اسم الزبون (أو الشركة) *', name),
-          I.field('الهاتف *', phone),
-          I.field('واتساب', wa),
+          h('div', { class: 'inl' }, [h('span', { class: 'lbl', text: 'النوع' }), typeBox.node]),
+          companyFld,
+          I.field((typeBox.get() === 'COMPANY' ? 'اسم المسؤول' : 'الاسم') + ' (بالأحرف اللاتينية) *', first),
+          I.field('اللقب (بالأحرف اللاتينية) *', last),
+          I.field('واتساب *', wa),
+          I.field('هاتف احتياطي', phone),
+          I.field('الكنية (Nickname)', nick),
           I.field('العنوان', addr),
           I.field('ملاحظات', notes)
         ]);
+        paintKind();
         I.modal({
           title: isNew ? 'زبون جديد' : 'تعديل الزبون',
           content: content,
           onSubmit: function () {
-            var data = { name: name.value, phone: phone.value, whatsapp: wa.value, address: addr.value, notes: notes.value };
+            var data = { kind: typeBox.get(), company_name: company.value, first_name: first.value, last_name: last.value, whatsapp: wa.value, phone: phone.value, nickname: nick.value, address: addr.value, notes: notes.value };
             if (isNew) {
               return I.rpc('clients.create', data).then(function (created) {
                 state.items.push(created); renderRows(); I.toast('تمت إضافة الزبون');
@@ -2195,15 +2234,16 @@ details.more>*+*{margin-top:10px}
       }
 
       function toggle(c) {
-        I.rpc('clients.setActive', { id: c.id, active: !c.active }).then(replaceItem).catch(fail);
+        replaceItem(Object.assign({}, c, { active: !c.active }));          // يظهر التغيير فورًا ويُؤكَّد من الخادم في الخلفية
+        I.rpc('clients.setActive', { id: c.id, active: !c.active }, { mode: 'quiet' }).then(replaceItem).catch(function (e) { replaceItem(c); fail(e); });
       }
 
       function visible() {
         var q = state.q.trim().toLowerCase();
         return state.items.filter(function (c) {
           if (!state.showOff && !c.active) return false;
-          if (state.noPhone && c.phone) return false;
-          return !q || c.name.toLowerCase().indexOf(q) >= 0 || String(c.phone).indexOf(q) >= 0;
+          if (state.noPhone && c.whatsapp) return false;
+          return !q || (c.name + ' ' + c.nickname + ' ' + c.company_name).toLowerCase().indexOf(q) >= 0 || String(c.whatsapp).indexOf(q) >= 0 || String(c.phone).indexOf(q) >= 0;
         });
       }
       function renderRows() {
@@ -2211,14 +2251,18 @@ details.more>*+*{margin-top:10px}
         count.textContent = rows.length + ' زبونًا';
         tbody.textContent = '';
         if (!rows.length) {
-          tbody.appendChild(h('tr', {}, [h('td', { colspan: '6', class: 'empty', text: 'لا يوجد زبائن مطابقون' })]));
+          tbody.appendChild(h('tr', {}, [h('td', { colspan: '5', class: 'empty', text: 'لا يوجد زبائن مطابقون' })]));
           return;
         }
         rows.forEach(function (c) {
           tbody.appendChild(h('tr', { class: c.active ? '' : 'off' }, [
-            h('td', { text: c.name }),
-            h('td', {}, c.phone ? [c.phone] : [h('span', { class: 'badge warn', text: 'أكمل الهاتف' })]),
-            h('td', { text: c.whatsapp }),
+            h('td', {}, [
+              h('b', { text: c.name }),
+              c.kind === 'COMPANY' && (c.first_name || c.last_name) ? h('div', { class: 'muted', text: [c.first_name, c.last_name].filter(Boolean).join(' ') }) : null,
+              (c.whatsapp || c.phone) ? h('div', { class: 'muted', dir: 'ltr', style: 'text-align:right', text: c.whatsapp || c.phone }) : null,
+              c.whatsapp ? null : h('span', { class: 'badge warn', text: 'أكمل الواتساب' })
+            ]),
+            h('td', { text: c.nickname }),
             h('td', { text: c.address }),
             h('td', {}, [h('span', { class: 'badge ' + (c.active ? 'ok' : ''), text: c.active ? 'مفعّل' : 'معطَّل' })]),
             h('td', { class: 'actions' }, [
@@ -2230,7 +2274,7 @@ details.more>*+*{margin-top:10px}
       }
 
       var search = h('input', {
-        type: 'search', placeholder: 'بحث بالاسم أو الهاتف...',
+        type: 'search', placeholder: 'بحث بالاسم أو الكنية أو الهاتف...',
         oninput: function (e) { state.q = e.target.value; renderRows(); }
       });
       var showOff = h('input', {
@@ -2241,19 +2285,19 @@ details.more>*+*{margin-top:10px}
       body.appendChild(h('div', { class: 'toolbar' }, [
         search,
         h('label', { class: 'check' }, [showOff, 'إظهار المعطَّلين']),
-        h('label', { class: 'check' }, [h('input', { type: 'checkbox', onchange: function (e) { state.noPhone = e.target.checked; renderRows(); } }), 'ناقصو الهاتف فقط']),
+        h('label', { class: 'check' }, [h('input', { type: 'checkbox', onchange: function (e) { state.noPhone = e.target.checked; renderRows(); } }), 'ناقصو الواتساب فقط']),
         h('span', { class: 'spacer' }),
         count,
         h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'طباعة / PDF', onclick: function () {
           var rows = visible();
-          I.ui.printList({ title: 'قائمة الزبائن', filters: (state.q ? 'بحث: ' + state.q + ' — ' : '') + (state.noPhone ? 'ناقصو الهاتف فقط — ' : '') + (state.showOff ? 'مع المعطَّلين' : 'النشطون فقط'),
-            cols: ['الاسم', 'الهاتف', 'واتساب', 'العنوان'], rows: rows.map(function (c) { return [c.name, c.phone || '—', c.whatsapp || '', c.address || '']; }), signs: ['أُعدّ بواسطة', 'المدير العام'] });
+          I.ui.printList({ title: 'قائمة الزبائن', filters: (state.q ? 'بحث: ' + state.q + ' — ' : '') + (state.noPhone ? 'ناقصو الواتساب فقط — ' : '') + (state.showOff ? 'مع المعطَّلين' : 'النشطون فقط'),
+            cols: ['الاسم واللقب', 'الكنية', 'واتساب', 'العنوان'], rows: rows.map(function (c) { return [c.name, c.nickname || '', c.whatsapp || '—', c.address || '']; }), signs: ['أُعدّ بواسطة', 'المدير العام'] });
         } }),
         h('button', { class: 'btn btn-primary', type: 'button', text: '+ زبون جديد', onclick: function () { openForm(null); } })
       ]));
       body.appendChild(h('div', { class: 'table-wrap' }, [
         h('table', {}, [
-          h('thead', {}, [h('tr', {}, ['الاسم', 'الهاتف', 'واتساب', 'العنوان', 'الحالة', 'إجراءات'].map(function (t) { return h('th', { text: t }); }))]),
+          h('thead', {}, [h('tr', {}, ['الاسم واللقب', 'الكنية', 'العنوان', 'الحالة', 'إجراءات'].map(function (t) { return h('th', { text: t }); }))]),
           tbody
         ])
       ]));
@@ -2467,7 +2511,7 @@ details.more>*+*{margin-top:10px}
           if (isAdmin) {
             actions.push(h('button', {
               type: 'button', class: 'btn btn-ghost btn-sm', text: p.active ? 'أرشفة' : 'استرجاع',
-              onclick: function () { I.rpc('projects.setActive', { id: p.id, active: !p.active }).then(replaceItem).catch(fail); }
+              onclick: function () { replaceItem(Object.assign({}, p, { active: !p.active })); I.rpc('projects.setActive', { id: p.id, active: !p.active }, { mode: 'quiet' }).then(replaceItem).catch(function (e) { replaceItem(p); fail(e); }); }
             }));
           }
           tbody.appendChild(h('tr', { class: p.active ? '' : 'off' }, [
@@ -2652,7 +2696,8 @@ details.more>*+*{margin-top:10px}
       }
 
       function toggle(u) {
-        I.rpc('users.setActive', { id: u.id, active: !u.active }).then(replaceItem).catch(fail);
+        replaceItem(Object.assign({}, u, { active: !u.active }));
+        I.rpc('users.setActive', { id: u.id, active: !u.active }, { mode: 'quiet' }).then(replaceItem).catch(function (e) { replaceItem(u); fail(e); });
       }
 
       function visible() {
@@ -2863,12 +2908,26 @@ details.more>*+*{margin-top:10px}
       function withPrint(rows, title, signs) {
         var F = FST.movements[title] = FST.movements[title] || {};
         var holder = h('div', {}), fb;
-        function vis() { return rows.filter(function (r) { return U.inRange(r.date, F.from, F.to); }); }
-        function draw() { holder.textContent = ''; holder.appendChild(movementsTable(vis())); }
-        fb = U.filterBar([{ key: 'from', type: 'date', label: 'من تاريخ' }, { key: 'to', type: 'date', label: 'إلى تاريخ' }], F, draw);
+        function vis() {
+          return rows.filter(function (r) {
+            if (F.dir === 'in' && !(r.amount > 0)) return false;
+            if (F.dir === 'out' && !(r.amount < 0)) return false;
+            return U.inRange(r.date, F.from, F.to);
+          });
+        }
+        function draw() {
+          holder.textContent = ''; var v = vis();
+          holder.appendChild(movementsTable(v));
+          var tin = 0, tout = 0; v.forEach(function (r) { if (r.amount > 0) tin += r.amount; else tout += -r.amount; });
+          if (v.length) holder.appendChild(h('p', { class: 'muted', text: v.length + ' حركة' + (F.dir !== 'out' ? ' — المداخيل: ' + money(tin) : '') + (F.dir !== 'in' ? ' — المخاريج: ' + money(tout) : '') }));
+        }
+        fb = U.filterBar([
+          { key: 'dir', type: 'select', label: 'نوع الحركة', all: 'الكل (مداخيل ومخاريج)', options: [{ id: 'in', label: 'المداخيل فقط' }, { id: 'out', label: 'المخاريج فقط' }] },
+          { key: 'from', type: 'date', label: 'من تاريخ' }, { key: 'to', type: 'date', label: 'إلى تاريخ' }
+        ], F, draw);
         var box = h('div', {}, [
           fb.node,
-          h('div', { class: 'toolbar' }, [h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'طباعة / PDF', onclick: function () { printStatement(vis(), title, signs, F.from || F.to ? fb.describe() : ''); } })]),
+          h('div', { class: 'toolbar' }, [h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'طباعة / PDF', onclick: function () { printStatement(vis(), title, signs, F.from || F.to || F.dir ? fb.describe() : ''); } })]),
           holder
         ]);
         draw();
@@ -3053,6 +3112,7 @@ details.more>*+*{margin-top:10px}
           W.work = U.chips(o.work_types, V.work, function (w) { V.work = w; });
           W.project = U.combo(o.projects.map(function (p) { return { id: p.id, label: p.name, sub: p.id }; }), { value: V.project, placeholder: 'اكتب اسم الزبون أو الموقع...' });
           W.date = U.dateField(V.date || undefined);
+          W.etape = U.combo(strItems(o.lists.etape), { value: V.etape, placeholder: 'اختياري', allowNew: true });
           var grid = [];
           var hdrFilled = V.project && (!rule.tiersList || V.tiers);
           var hdr = null;
@@ -3065,21 +3125,25 @@ details.more>*+*{margin-top:10px}
               h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'تغيير', onclick: function () { sync(); V.locked = false; buildPanel(); } })
             ]);
           } else {
+            grid.push(I.field('التاريخ', W.date.node));
             if (o.projects.length > 1 || !V.project) grid.push(I.field('المشروع *', W.project.node));
+            grid.push(I.field('المرحلة', W.etape.node));
             if (rule.tiersList) {
               W.tiers = U.combo(strItems(o.lists[rule.tiersList]), { value: V.tiers, placeholder: 'اكتب أول حرف...', allowNew: true });
               grid.push(I.field(rule.tiersList === 'macon' ? 'المعلّم *' : 'المورد *', W.tiers.node));
             }
           }
+          if (hdr) grid.push(I.field('المرحلة', W.etape.node));
+          // التفاصيل الاختيارية (المادة/الكمية/السعر/الوحدة أو التفصيل): مخفية حتى يطلبها المهندس
+          var moreItems = [];
           if (rule.article) {
             W.article = U.combo(strItems(o.lists.article), { value: V.article, placeholder: 'اكتب أول حرف...', onChange: prefill, allowNew: true });
-            grid.push(I.field('المادة *', W.article.node));
+            moreItems.push(I.field('المادة', W.article.node));
           }
           if (rule.detail) {
             W.detail = U.combo(strItems(o.lists.detail), { value: V.detail, placeholder: 'اختياري', allowNew: true });
-            grid.push(I.field('التفصيل', W.detail.node));
+            moreItems.push(I.field('التفصيل', W.detail.node));
           }
-          W.etape = U.combo(strItems(o.lists.etape), { value: V.etape, placeholder: 'اختياري', allowNew: true });
           var qtyRow = null;
           if (rule.qty) {
             W.qty = h('input', { type: 'text', inputmode: 'decimal', placeholder: 'الكمية', value: V.qty === '' ? '' : String(V.qty) });
@@ -3091,10 +3155,11 @@ details.more>*+*{margin-top:10px}
               h('div', { class: 'pair' }, [I.field('الكمية', W.qty), I.field('سعر الوحدة', W.price.node)]),
               h('div', { class: 'inl' }, [h('span', { class: 'lbl', text: 'الوحدة' }), W.unit.node])
             ]);
+            moreItems.push(qtyRow);
           }
           W.amount = U.moneyField(V.amount);
           W.note = h('input', { type: 'text', maxlength: '300', placeholder: 'اختياري', value: V.note });
-          W.sbon = h('input', { type: 'text', maxlength: '40', placeholder: 'اختياري', value: V.sbon || '' });
+          W.sbon = h('input', { type: 'text', maxlength: '40', placeholder: 'اختياري — رقم وصل المورد إن وُجد', value: V.sbon });
 
           panel.appendChild(h('div', { class: 'ph' }, [h('h4', { text: 'مصروف جديد' }), kname, W.kind.node]));
           if (!isAdmin && S.balance !== null) panel.appendChild(h('div', { class: 'balmini' }, ['رصيد صندوقي: ', h('b', { class: S.balance < 0 ? 'neg' : '', text: money(S.balance) + ' DA' })]));
@@ -3106,13 +3171,19 @@ details.more>*+*{margin-top:10px}
           }
           var gridEl = h('div', { class: 'form-grid' }, grid);
           var amountEl = h('div', { class: 'form-grid amountrow' }, [I.field('المبلغ (DA) *', W.amount.node)]);
-          // الحقول الاختيارية ظاهرة دائمًا وثابتة (لا طيّ): التاريخ، المرحلة، نوع الأشغال، الملاحظة
+          // الترتيب: التاريخ · المشروع · المرحلة · المورد · الوصل (تلقائي) · [تفاصيل مخفية] · المبلغ · نوع الأشغال · ملاحظة
           var extra = h('div', { class: 'extra' }, [
-            h('div', { class: 'pair' }, [I.field('التاريخ', W.date.node), I.field('المرحلة', W.etape.node)]),
             h('div', { class: 'inl' }, [h('span', { class: 'lbl', text: 'نوع الأشغال' }), W.work.node, h('small', { class: 'muted', text: 'عادي: ضمن العقد · إضافي: خارج العقد (بطلب الزبون)' })]),
-            h('div', { class: 'pair' }, [I.field('وصل المورد (Bon fournisseur)', W.sbon), I.field('ملاحظة', W.note)])
+            I.field('ملاحظة (اختياري)', W.note)
           ]);
-          var fieldsEl = h('div', { class: 'fgroup' }, [hdr, gridEl, qtyRow, amountEl, extra]);
+          var rcpt = h('small', { class: 'muted rcpt', text: '🧾 رقم الوصل يُنشأ تلقائيًا عند الحفظ' });
+          var moreBox = h('div', { class: 'morebox', hidden: !(V.more || V.article || V.detail || V.qty || V.unit || V.price) }, moreItems);
+          var moreBtn = h('button', { type: 'button', class: 'btn btn-ghost btn-sm morebtn', text: moreBox.hidden ? '＋ تفاصيل المادة (اختياري)' : '－ إخفاء التفاصيل', onclick: function () {
+            moreBox.hidden = !moreBox.hidden; V.more = !moreBox.hidden;
+            moreBtn.textContent = moreBox.hidden ? '＋ تفاصيل المادة (اختياري)' : '－ إخفاء التفاصيل';
+            if (!moreBox.hidden) { var f = moreBox.querySelector('input'); if (f) f.focus(); }
+          } });
+          var fieldsEl = h('div', { class: 'fgroup' }, [hdr, gridEl, rcpt, I.field('وصل المورد (اختياري)', W.sbon), moreItems.length ? moreBtn : null, moreItems.length ? moreBox : null, amountEl, extra]);
           panel.appendChild(fieldsEl);
           panel.appendChild(h('div', { class: 'toolbar' }, [
             W.save = h('button', { type: 'button', class: 'btn btn-primary btn-big', text: 'حفظ المصروف', onclick: submit })
@@ -3158,17 +3229,17 @@ details.more>*+*{margin-top:10px}
           sync();
           V.kind = c.kind; V.work = c.work_type || V.work; V.tiers = c.tiers || ''; V.article = c.article || ''; V.detail = c.detail || '';
           V.unit = c.unit || ''; V.price = Number(c.unit_price) || ''; V.qty = ''; V.amount = '';
+          if (V.article || V.detail || V.price) V.more = true;
           buildPanel();
           (W.qty || W.amount.input).focus();
         }
 
         function focusNext() {
-          var el = (W.article && W.article.input) || (W.detail && W.detail.input) || W.amount.input;
-          el.focus();
+          W.amount.input.focus();
         }
 
         function lineText(l) {
-          return [l.tiers, l.article, l.detail, l.etape].filter(Boolean).join(' · ');
+          return [l.tiers, l.article, l.detail, l.etape].filter(Boolean).join(' · ') || kindName(l.kind).split(' (')[0];
         }
 
         // يضيف عنصرًا جديدًا (كتبه المهندس) إلى القائمة المحلية ليظهر في الخيارات من السطر التالي
@@ -3185,7 +3256,6 @@ details.more>*+*{margin-top:10px}
           try {
             if (!V.project) throw new Error('اختر المشروع');
             if (rule.tiersList && !V.tiers) throw new Error(rule.tiersList === 'macon' ? 'اختر المعلّم' : 'اختر المورد');
-            if (rule.article && !V.article) throw new Error('اختر المادة');
             var amount = V.amount;
             if (!(amount > 0)) throw new Error('أدخل المبلغ');
           } catch (e) { I.toast(e.message, 'error'); return false; }
@@ -3685,7 +3755,7 @@ details.more>*+*{margin-top:10px}
     admin: {
       label: 'المدير والمسؤول',
       steps: [
-        ['clients', 'إضافة زبون', 'من قسم «الزبائن» اضغط «+ زبون جديد»، واكتب الاسم والهاتف. الزبون يظهر بعدها في قائمة اختيار المشاريع.'],
+        ['clients', 'إضافة زبون', 'من قسم «الزبائن» اضغط «+ زبون جديد»، واختر «زبون» أو «شركة»، واكتب الاسم واللقب بالأحرف اللاتينية ورقم الواتساب (إلزامي). الزبون يظهر بعدها في قائمة اختيار المشاريع.'],
         ['projects', 'إنشاء مشروع', 'من قسم «المشاريع» اضغط «+ مشروع جديد»، اختر الزبون والبلدية من القائمة (أو «أخرى») وعيّن المهندس المسؤول.'],
         ['caisses', 'تسجيل دفعة من الزبون', 'من «الصناديق والخزينة» ثم تبويب «الدفعات» اضغط «+ دفعة جديدة». يُنشأ وصل استلام يمكن طباعته بزر «طباعة».'],
         ['caisses', 'تمويل صندوق مهندس', 'من تبويب «الصناديق» اضغط «تحويل» بجانب المهندس واكتب المبلغ. أو راجع «التحويلات» واضغط «اعتماد» أو «رفض» على طلبات المهندسين.'],
@@ -3704,7 +3774,7 @@ details.more>*+*{margin-top:10px}
       steps: [
         ['projects', 'مشاريعي', 'قسم «المشاريع» يعرض المشاريع المسندة إليك فقط. اضغط «فتح» لرؤية المصاريف وتوزيعها وتقدم المرحلة.'],
         ['caisses', 'طلب مبلغ', 'من «الصناديق والخزينة» تبويب «صندوقي» اضغط «+ طلب مبلغ». يصلك المبلغ في صندوقك بعد اعتماد الإدارة.'],
-        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) والمشروع والمورد، ثم المادة والمبلغ، واضغط «حفظ المصروف». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اكتبه واختر «+ إضافة». الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي، ويمكنك كتابة «وصل المورد» إن وُجد. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
+        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) ثم التاريخ والمشروع والمرحلة والمورد، وأدخل المبلغ، واضغط «حفظ المصروف». رقم الوصل يُنشأ تلقائيًا. إن أردت تسجيل المادة والكمية والسعر اضغط «＋ تفاصيل المادة (اختياري)». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اكتبه واختر «+ إضافة». الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي، ويمكنك كتابة «وصل المورد» إن وُجد. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
         ['clock', 'متابعة الطلبات', 'تبويب «طلبات المبالغ» يعرض حالة كل طلب: بالانتظار أو معتمد أو مرفوض.'],
         ['guide', 'كشف حسابي', 'في تبويب «صندوقي» اضغط «طباعة / PDF» للحصول على كشف بحركات صندوقك بشعار المكتب.']
       ],
@@ -3752,6 +3822,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.17.3"></script>
+<script src="pwa.js?v=0.18.1"></script>
 </body>
 </html>
