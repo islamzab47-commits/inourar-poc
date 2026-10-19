@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.18.2"></script>
+<script src="config.js?v=0.18.3"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.18.2">
+<link rel="stylesheet" href="fonts.css?v=0.18.3">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -3109,7 +3109,7 @@ details.more>*+*{margin-top:10px}
           W.work = U.chips(o.work_types, V.work, function (w) { V.work = w; });
           W.project = U.combo(o.projects.map(function (p) { return { id: p.id, label: p.name, sub: p.id }; }), { value: V.project, placeholder: 'اكتب اسم الزبون أو الموقع...' });
           W.date = U.dateField(V.date || undefined);
-          W.etape = U.combo(strItems(o.lists.etape), { value: V.etape, placeholder: 'اختياري', allowNew: true });
+          W.etape = U.combo(strItems(o.lists.etape), { value: V.etape, placeholder: 'اكتب أول حرف...', allowNew: true });
           var grid = [];
           var hdrFilled = V.project && (!rule.tiersList || V.tiers);
           var hdr = null;
@@ -3124,13 +3124,13 @@ details.more>*+*{margin-top:10px}
           } else {
             grid.push(I.field('التاريخ', W.date.node));
             if (o.projects.length > 1 || !V.project) grid.push(I.field('المشروع *', W.project.node));
-            grid.push(I.field('المرحلة', W.etape.node));
+            grid.push(I.field('المرحلة *', W.etape.node));
             if (rule.tiersList) {
               W.tiers = U.combo(strItems(o.lists[rule.tiersList]), { value: V.tiers, placeholder: 'اكتب أول حرف...', allowNew: true });
               grid.push(I.field(rule.tiersList === 'macon' ? 'المعلّم *' : 'المورد *', W.tiers.node));
             }
           }
-          if (hdr) grid.push(I.field('المرحلة', W.etape.node));
+          if (hdr) grid.push(I.field('المرحلة *', W.etape.node));
           // التفاصيل الاختيارية (المادة/الكمية/السعر/الوحدة أو التفصيل): مخفية حتى يطلبها المهندس
           var moreItems = [];
           if (rule.article) {
@@ -3252,6 +3252,7 @@ details.more>*+*{margin-top:10px}
           var o = S.opts, rule = o.rules[V.kind];
           try {
             if (!V.project) throw new Error('اختر المشروع');
+            if (!String(V.etape || '').trim()) throw new Error('اختر المرحلة');
             if (rule.tiersList && !V.tiers) throw new Error(rule.tiersList === 'macon' ? 'اختر المعلّم' : 'اختر المورد');
             var amount = V.amount;
             if (!(amount > 0)) throw new Error('أدخل المبلغ');
@@ -3271,7 +3272,7 @@ details.more>*+*{margin-top:10px}
           learn(rule.tiersList, line.tiers); learn('article', line.article); learn('detail', line.detail); learn('etape', line.etape);
           // نفرّغ ما يتجدد في كل سطر ونُبقي المشروع والتاريخ والمورد والمرحلة؛ والرأس (المشروع/المورد) يُطوى في شريط صغير
           V.article = ''; V.detail = ''; V.qty = ''; V.unit = ''; V.price = ''; V.amount = ''; V.note = ''; V.sbon = '';
-          V.locked = true;
+          V.locked = false;   // الحقول الثابتة تبقى ظاهرة بقيمها السابقة وقابلة للتعديل (لا تُطوى في شريط)
           qPersist();
           buildPanel();
           drawQueue();
@@ -3771,7 +3772,7 @@ details.more>*+*{margin-top:10px}
       steps: [
         ['projects', 'مشاريعي', 'قسم «المشاريع» يعرض المشاريع المسندة إليك فقط. اضغط «فتح» لرؤية المصاريف وتوزيعها وتقدم المرحلة.'],
         ['caisses', 'طلب مبلغ', 'من «الصناديق والخزينة» تبويب «صندوقي» اضغط «+ طلب مبلغ». يصلك المبلغ في صندوقك بعد اعتماد الإدارة.'],
-        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) ثم التاريخ والمشروع والمرحلة والمورد، وأدخل المبلغ، واضغط «حفظ المصروف». رقم الوصل يُنشأ تلقائيًا. إن أردت تسجيل المادة والكمية والسعر اضغط «＋ تفاصيل المادة (اختياري)». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اكتبه واختر «+ إضافة». الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي، ويمكنك كتابة «وصل المورد» إن وُجد. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
+        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) ثم التاريخ والمشروع والمرحلة (إلزامية) والمورد، وأدخل المبلغ، واضغط «حفظ المصروف». رقم الوصل يُنشأ تلقائيًا. إن أردت تسجيل المادة والكمية والسعر اضغط «＋ تفاصيل المادة (اختياري)». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اكتبه واختر «+ إضافة». الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي، ويمكنك كتابة «وصل المورد» إن وُجد. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
         ['clock', 'متابعة الطلبات', 'تبويب «طلبات المبالغ» يعرض حالة كل طلب: بالانتظار أو معتمد أو مرفوض.'],
         ['guide', 'كشف حسابي', 'في تبويب «صندوقي» اضغط «طباعة / PDF» للحصول على كشف بحركات صندوقك بشعار المكتب.']
       ],
@@ -3819,6 +3820,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.18.2"></script>
+<script src="pwa.js?v=0.18.3"></script>
 </body>
 </html>
