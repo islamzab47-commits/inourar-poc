@@ -1,6 +1,6 @@
-/* INOURAR service worker — 0.17.2 */
-const V = 'inourar-0.17.2';
-const SHELL = ["./", "index.html", "fonts.css?v=0.17.2", "config.js?v=0.17.2", "pwa.js?v=0.17.2", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+/* INOURAR service worker — 0.17.3 */
+const V = 'inourar-0.17.3';
+const SHELL = ["./", "index.html", "fonts.css?v=0.17.3", "config.js?v=0.17.3", "pwa.js?v=0.17.3", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 /* الإشعارات: نعالج حدث push بأنفسنا دون مكتبة Firebase داخل الـSW (فلا يتعطل التثبيت إن حُجب gstatic).
    رسالة FCM بيانات فقط: {data:{title,body,tag}}. إن كان التطبيق ظاهرًا نمرّرها للصفحة، وإلا نعرض إشعار النظام. */
 self.addEventListener('push', e => {

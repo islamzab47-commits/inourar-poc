@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.17.2"></script>
+<script src="config.js?v=0.17.3"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.17.2">
+<link rel="stylesheet" href="fonts.css?v=0.17.3">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -904,9 +904,9 @@ details.more>*+*{margin-top:10px}
   function warmList() {
     var u = state.user; if (!u || u.role === 'CLIENT') return [];
     var adm = u.role === 'DG' || u.role === 'RESP';
-    var l = [['charges.options', {}], ['charges.list', {}], ['caisses.summary', {}], ['transfers.list', {}]];
+    var l = [['dashboard.summary', {}], ['charges.options', {}], ['charges.list', {}], ['caisses.summary', {}], ['transfers.list', {}]];
     if (!adm) l.push(['caisses.movements', { caisse: u.id }]);
-    else l.push(['projects.options', {}], ['projects.list', {}], ['versements.list', {}]);
+    else l.push(['projects.options', {}], ['projects.list', {}], ['versements.list', {}], ['clients.list', {}], ['users.list', {}]);
     return l;
   }
   function warmSoon(ms) {
@@ -1300,7 +1300,7 @@ details.more>*+*{margin-top:10px}
         state.token = data.token; state.user = data.user;
         storeSet(data.token);
         $('loginPass').value = '';
-        return rpc('me');
+        return data.roleLabel ? data : rpc('me');
       })
       .then(function (me) { state.roleLabel = me.roleLabel; state.build = me.build || ''; saveMe(); loadCache(); renderApp(); warmSoon(2500); })
       .catch(function (err) { showLoginError(err.message); })
@@ -3752,6 +3752,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.17.2"></script>
+<script src="pwa.js?v=0.17.3"></script>
 </body>
 </html>
