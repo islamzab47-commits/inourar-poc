@@ -1,6 +1,6 @@
-/* INOURAR service worker — 0.18.3 */
-const V = 'inourar-0.18.3';
-const SHELL = ["./", "index.html", "fonts.css?v=0.18.3", "config.js?v=0.18.3", "pwa.js?v=0.18.3", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+/* INOURAR service worker — 0.20.0 */
+const V = 'inourar-0.20.0';
+const SHELL = ["./", "index.html", "fonts.css?v=0.20.0", "config.js?v=0.20.0", "pwa.js?v=0.20.0", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 /* الإشعارات: نعالج حدث push بأنفسنا دون مكتبة Firebase داخل الـSW (فلا يتعطل التثبيت إن حُجب gstatic).
    رسالة FCM بيانات فقط: {data:{title,body,tag}}. إن كان التطبيق ظاهرًا نمرّرها للصفحة، وإلا نعرض إشعار النظام. */
 self.addEventListener('push', e => {
@@ -9,8 +9,8 @@ self.addEventListener('push', e => {
   e.waitUntil((async () => {
     const cl = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const vis = cl.filter(c => c.visibilityState === 'visible');
-    if (vis.length) { vis.forEach(c => c.postMessage({ type: 'push', title: d.title || '', body: d.body || '' })); return; }
-    await self.registration.showNotification(d.title || 'INOURAR', { body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || undefined, lang: 'ar', dir: 'rtl', data: d });
+    if (vis.length) { vis.forEach(c => c.postMessage({ type: 'push', title: d.title || '', body: d.body || '', go: d.go || '' })); return; }
+    await self.registration.showNotification(d.title || 'INOURAR', { body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || undefined, lang: 'ar', dir: 'rtl', data: d, requireInteraction: true, renotify: !!d.tag, vibrate: [200, 100, 200] });
   })());
 });
 let updFlag = false;
@@ -46,8 +46,9 @@ self.addEventListener('fetch', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const go = (e.notification.data && e.notification.data.go) || 'caisses';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(l => {
-    if (l.length) { l[0].postMessage({ type: 'open', module: 'caisses' }); return l[0].focus(); }
-    return self.clients.openWindow('./?go=caisses');
+    if (l.length) { l[0].postMessage({ type: 'open', go }); return l[0].focus(); }
+    return self.clients.openWindow('./?go=' + encodeURIComponent(go));
   }));
 });

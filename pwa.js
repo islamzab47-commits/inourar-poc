@@ -37,8 +37,8 @@
     navigator.serviceWorker.addEventListener('message', function (e) {
       var d = e.data || {};
       if (d.type === 'update') { updated = true; paintBar(); }
-      if (d.type === 'open') goTo(d.module);
-      if (d.type === 'push') { try { I().toast(d.body || d.title || 'إشعار جديد', 'big', 6000); if (I().notif) I().notif.refresh(); } catch (x) {} }
+      if (d.type === 'open') goTo(d.go || d.module);
+      if (d.type === 'push') { try { I().toast((d.title ? d.title + ' — ' : '') + (d.body || 'إشعار جديد'), 'big', 9000, d.go ? function () { goTo(d.go); } : null); if (I().notif) I().notif.refresh(); } catch (x) {} }
     });
     var hadCtl = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', function () { if (hadCtl) { updated = true; paintBar(); } });
@@ -48,7 +48,14 @@
   }
 
   /* ---------- فتح شاشة عند الضغط على إشعار ---------- */
-  function goTo(mod) { try { if (I() && I().user() && I().openModule) I().openModule(mod || 'caisses'); } catch (e) {} }
+  function goTo(go) {   // go = "وحدة[:تبويب[:إجراء]]" مثل caisses:transfers
+    try {
+      if (!(I() && I().user() && I().openModule)) return;
+      var p = String(go || 'caisses').split(':'), mod = p[0] || 'caisses';
+      if (p[1]) I().pending[mod] = { tab: p[1], action: p[2] || '' };
+      I().openModule(mod);
+    } catch (e) {}
+  }
   var pendingGo = null;
   try { var q = new URLSearchParams(location.search).get('go'); if (q) { pendingGo = q; history.replaceState(null, '', location.pathname); } } catch (e) {}
 

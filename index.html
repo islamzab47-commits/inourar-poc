@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script src="config.js?v=0.18.3"></script>
+<script src="config.js?v=0.20.0"></script>
 <title>INOURAR — Architecture</title>
 <script>
 (function () {
@@ -23,7 +23,7 @@
   document.documentElement.setAttribute('data-theme', t);
 })();
 </script>
-<link rel="stylesheet" href="fonts.css?v=0.18.3">
+<link rel="stylesheet" href="fonts.css?v=0.20.0">
 <style>
 :root{
   --crimson:#B01F2E; --crimson-d:#7A1220; --crimson-t:#B01F2E;
@@ -270,6 +270,8 @@ textarea:focus{outline:0;border-color:var(--crimson);box-shadow:0 0 0 4px rgba(1
 .toast{background:#2A1D20;color:#fff;padding:11px 18px;border-radius:12px;font-size:14px;max-width:420px;box-shadow:0 10px 26px rgba(0,0,0,.25);animation:toastIn .3s var(--ease) both}
 .toast.err{background:var(--danger)}
 .toast.big{background:var(--crimson);font-size:18px;font-weight:700;padding:14px 22px;max-width:520px;text-align:center}
+.toast.clk{pointer-events:auto;cursor:pointer;text-decoration:underline}
+.toast.big{font-size:20px;padding:18px 26px}
 .toast.ok{border-inline-start:4px solid #2E7D32}
 
 /* مكوّنات الإدخال السريع */
@@ -442,6 +444,8 @@ details.more>*+*{margin-top:10px}
 .big-card .t{font-size:14px;color:var(--muted,#6b5f5a)}.big-card .v{font-size:24px;font-weight:800;direction:ltr;unicode-bidi:isolate;text-align:start}
 .big-card .hint{font-size:12px;color:var(--muted,#6b5f5a);margin-top:2px}
 .big-card.in .v{color:#1c7a3a}.big-card.out .v{color:var(--orange-d)}
+.pinned{border:2px solid var(--crimson);background:var(--card);border-radius:18px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow)}.pinned h3{margin:0 0 8px;font-size:15px;color:var(--crimson)}.pin-row{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:start;font:inherit;background:transparent;border:0;border-top:1px solid var(--line);padding:10px 4px;cursor:pointer;color:inherit}.pin-row:first-of-type{border-top:0}.pin-row b{display:block;font-size:15px}.pin-row small{color:var(--muted,#6b5f5a)}.pin-row .amt{font-weight:800;direction:ltr;unicode-bidi:isolate}.pin-row .go{color:var(--crimson);font-weight:700;white-space:nowrap}.pin-row.negative .amt{color:var(--orange-d)}
+.paymode{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}.priorline{display:block}.restline{display:block;font-weight:700}.restline.neg{color:var(--danger)}.rbox{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px dashed var(--line);border-radius:14px}
 .act-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}.act-row .btn{padding:14px;font-size:16px}
 .balline{grid-column:1/-1;text-align:center;font-weight:700}
 .balmini{font-size:14px;font-weight:700;padding:2px}.savestate .balmini{margin-top:4px}
@@ -607,8 +611,9 @@ details.more>*+*{margin-top:10px}
 
   function field(labelText, input) { return h('label', {}, [labelText, input]); }
 
-  function toast(msg, kind, ms) {
-    var t = h('div', { class: 'toast' + (kind === 'error' ? ' err' : kind === 'big' ? ' big' : kind === 'ok' ? ' ok' : ''), text: msg });
+  function toast(msg, kind, ms, onClick) {
+    var t = h('div', { class: 'toast' + (kind === 'error' ? ' err' : kind === 'big' ? ' big' : kind === 'ok' ? ' ok' : '') + (onClick ? ' clk' : ''), text: msg });
+    if (onClick) t.addEventListener('click', function () { if (t.parentNode) t.parentNode.removeChild(t); try { onClick(); } catch (e) {} });
     $('toastBox').appendChild(t);
     setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, ms || 3500);
   }
@@ -906,7 +911,7 @@ details.more>*+*{margin-top:10px}
   function warmList() {
     var u = state.user; if (!u || u.role === 'CLIENT') return [];
     var adm = u.role === 'DG' || u.role === 'RESP';
-    var l = [['dashboard.summary', {}], ['charges.options', {}], ['charges.list', {}], ['caisses.summary', {}], ['transfers.list', {}]];
+    var l = [['dashboard.summary', {}], ['charges.options', {}], ['charges.list', {}], ['caisses.summary', {}], ['transfers.list', {}], ['goods.list', {}], ['goods.options', {}]];
     if (!adm) l.push(['caisses.movements', { caisse: u.id }]);
     else l.push(['projects.options', {}], ['projects.list', {}], ['versements.list', {}], ['clients.list', {}], ['users.list', {}]);
     return l;
@@ -1414,18 +1419,23 @@ details.more>*+*{margin-top:10px}
         list.appendChild(h('li', { class: 'none', text: 'لا نتائج' }));
       } else {
         matches.forEach(function (it, i) {
-          var li = h('li', { class: (i === hot ? 'hot' : '') + (it.isNew ? ' add' : ''), role: 'option' }, [h('span', { text: it.isNew ? '+ إضافة «' + it.label + '» كخيار جديد' : it.label }), it.sub ? h('small', { text: it.sub }) : null]);
+          var li = h('li', { class: (i === hot ? 'hot' : '') + (it.isNew || it.isOther ? ' add' : ''), role: 'option' }, [h('span', { text: it.isNew ? '+ إضافة «' + it.label + '» كخيار جديد' : (it.isOther ? 'أخرى… (اكتب اسمًا غير موجود في القائمة)' : it.label) }), it.sub ? h('small', { text: it.sub }) : null]);
           li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(it); });
           list.appendChild(li);
         });
       }
     }
     function show() {
-      matches = withNew(find(input.value), input.value); hot = 0; open = true;
+      matches = withNew(find(input.value), input.value);
+      if (opts.other && !cleanTyped(input.value)) matches = matches.concat([{ id: '__other', label: 'أخرى…', isOther: true }]);
+      hot = 0; open = true;
       list.hidden = false; input.setAttribute('aria-expanded', 'true'); draw();
     }
     function hide() { open = false; list.hidden = true; input.setAttribute('aria-expanded', 'false'); }
     function choose(it) {
+      if (it.isOther) {   // «أخرى»: يكتب المستخدم اسمًا جديدًا فيُضاف إلى القائمة عند الحفظ
+        selected = null; input.value = ''; input.placeholder = 'اكتب الاسم الجديد ثم Enter'; hide(); input.focus(); return;
+      }
       selected = it; input.value = it.label; hide();
       if (opts.onChange) opts.onChange(it.id);
     }
@@ -1659,6 +1669,12 @@ details.more>*+*{margin-top:10px}
     '.neg{color:#B3261E}.num{direction:ltr;unicode-bidi:isolate;text-align:left}' +
     '.pg{width:100%;border-collapse:collapse;margin:0}.pg>thead>tr>td,.pg>tfoot>tr>td,.pg>tbody>tr>td{border:0;padding:0;background:none}.pg .sp{height:14mm}.pg>tbody>tr>td{padding:0 15mm}';
   function fontFaces() { var el = document.getElementById('fontFaces'); return el ? el.textContent : ''; }
+  // في نسخة PWA الخطوط في ملف fonts.css (لا عنصر style مضمّن): نربطه بصفحة الطباعة بعنوانه الكامل
+  function fontLink() {
+    if (document.getElementById('fontFaces')) return '';
+    var l = document.querySelector('link[rel="stylesheet"][href*="fonts.css"]');
+    return l && l.href ? '<link rel="stylesheet" href="' + l.href.replace(/"/g, '&quot;') + '">' : '';
+  }
   // اسم الملف المحمّل/المحفوظ كـ PDF: Inourar_المهندس_العنوان_التاريخ
   function fname(title, who) {
     var u = (I.user && I.user()) || {};
@@ -1708,7 +1724,7 @@ details.more>*+*{margin-top:10px}
     ]));
     var wrap = h('div', {}, kids);
     var htmlDoc = '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>' + fname(spec.title || 'INOURAR', spec.who).replace(/[<>&]/g, '') +
-      '</title><style>' + fontFaces() + PRINT_CSS + '</style></head><body><table class="pg"><thead><tr><td><div class="sp"></div></td></tr></thead><tbody><tr><td>' + wrap.innerHTML + '</td></tr></tbody><tfoot><tr><td><div class="sp"></div></td></tr></tfoot></table></body></html>';
+      '</title>' + fontLink() + '<style>' + fontFaces() + PRINT_CSS + '</style></head><body><table class="pg"><thead><tr><td><div class="sp"></div></td></tr></thead><tbody><tr><td>' + wrap.innerHTML + '</td></tr></tbody><tfoot><tr><td><div class="sp"></div></td></tr></tfoot></table></body></html>';
     var fr = document.createElement('iframe');
     fr.setAttribute('aria-hidden', 'true');
     fr.style.cssText = 'position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
@@ -1932,6 +1948,22 @@ details.more>*+*{margin-top:10px}
     ]);
   }
 
+  // لوحة مثبتة أعلى الصفحة للإدارة: طلبات المبالغ المعلّقة والأرصدة السالبة، تأخذك مباشرة إلى التبويب المناسب
+  function pinnedPanel(d) {
+    var items = d.pinned || [];
+    if (!items.length) return null;
+    var rows = items.map(function (it) {
+      return h('button', { type: 'button', class: 'pin-row ' + it.kind, onclick: function () {
+        var p = String(it.go || 'caisses').split(':'); I.pending[p[0]] = { tab: p[1] || '', action: p[2] || '' }; I.openModule(p[0]);
+      } }, [
+        h('span', {}, [h('b', { text: it.title }), h('small', { text: it.text })]),
+        h('span', { class: 'amt', text: I.ui.money(it.amount) + ' دج' }),
+        h('span', { class: 'go', text: 'مراجعة ‹' })
+      ]);
+    });
+    return h('section', { class: 'pinned' }, [h('h3', { text: '📌 يحتاج قرارك الآن (' + items.length + ')' })].concat(rows));
+  }
+
   function draw(root, d, enter) {
     root.classList.toggle('static', !enter);
     var admin = d.role === 'DG' || d.role === 'RESP';
@@ -1951,6 +1983,7 @@ details.more>*+*{margin-top:10px}
       h('h2', { text: greeting(d.today) }),
       h('span', { class: 'muted', text: dateLine(d.today) + ' · هذا ملخص نشاط ' + (admin ? 'المكتب' : 'مشاريعك') })
     ]));
+    var pn = pinnedPanel(d); if (pn) root.appendChild(pn);
     if (!admin) root.appendChild(engineerTop(d));
     root.appendChild(h('section', { class: 'kpis' }, kp));
     root.appendChild(h('section', { class: 'dash-grid' }, [chart(d, admin), alerts(d)]));
@@ -2454,12 +2487,12 @@ details.more>*+*{margin-top:10px}
             h('small', { class: 'muted', text: 'تقدم المشروع حسب المرحلة: ' + p.stage })
           ]));
           if (p.by_kind && p.by_kind.length) {
-            var tot = p.by_kind.reduce(function (a, k) { return a + k.amount; }, 0) || 1;
+            var tot = p.by_kind.reduce(function (a, k) { return a + Math.abs(k.amount); }, 0) || 1;   // السلع المنقولة الصادرة تظهر بالسالب
             box.appendChild(h('h4', { text: 'توزيع المصاريف' }));
             box.appendChild(h('div', { class: 'pd-kind' }, p.by_kind.map(function (k) {
               return h('div', { style: 'display:flex;flex-direction:column;gap:4px' }, [
                 h('div', { class: 'r' }, [h('span', { text: k.label }), h('b', { text: M(k.amount) })]),
-                h('div', { class: 'trk' }, [h('span', { class: 'fil', style: 'width:' + Math.max(2, Math.round(k.amount * 100 / tot)) + '%' })])
+                h('div', { class: 'trk' }, [h('span', { class: 'fil', style: 'width:' + Math.max(2, Math.round(Math.abs(k.amount) * 100 / tot)) + '%' })])
               ]);
             })));
           }
@@ -2768,7 +2801,7 @@ details.more>*+*{margin-top:10px}
   var I = window.INOURAR, h = I.h, U = I.ui;
 
   var METHODS = [{ id: 'CASH', label: 'نقدًا' }, { id: 'CHEQUE', label: 'شيك' }, { id: 'TRANSFER', label: 'تحويل' }];
-  var STATUS_CLASS = { PENDING: 'warn', APPROVED: 'ok', REJECTED: '', CANCELLED: '', VOID: '' };
+  var STATUS_CLASS = { PENDING: 'warn', APPROVED: 'ok', ACCEPTED: 'ok', REFUSED: '', REJECTED: '', CANCELLED: '', VOID: '' };
 
   var money = U.money;
   function thead(cols) { return h('thead', {}, [h('tr', {}, cols.map(function (t) { return h('th', { text: t }); }))]); }
@@ -2848,14 +2881,14 @@ details.more>*+*{margin-top:10px}
       var tabsBox = h('div', { class: 'pills' });
       var area = h('div', {});
       var tabs = isAdmin
-        ? [['caisses', 'الصناديق'], ['charges', 'المصاريف'], ['versements', 'الدفعات'], ['transfers', 'التحويلات']]
-        : [['mine', 'صندوقي'], ['charges', 'المصاريف'], ['transfers', 'طلبات المبالغ']];
+        ? [['caisses', 'الصناديق'], ['charges', 'المصاريف'], ['versements', 'الدفعات'], ['transfers', 'التحويلات'], ['goods', 'نقل السلع']]
+        : [['mine', 'صندوقي'], ['charges', 'المصاريف'], ['transfers', 'طلبات المبالغ'], ['goods', 'نقل السلع']];
       var current = tabs[0][0];
       var intent = I.pending.caisses || null; I.pending.caisses = null;
       if (intent && intent.tab && tabs.some(function (t) { return t[0] === intent.tab; })) current = intent.tab;
       // حالة تبقى حيّة عند إعادة رسم الشاشة (تحديث/تبديل تبويب): الفلاتر ونموذج المصاريف والأسطر غير المحفوظة
       var FST = { charges: {}, versements: {}, transfers: {}, caisses: {}, movements: {} };
-      var CH = { V: { kind: 'MAT', work: 'STD', project: '', date: '', tiers: '', article: '', detail: '', etape: '', qty: '', unit: '', price: '', amount: '', note: '', sbon: '', locked: false, more: false } };
+      var CH = { V: { kind: 'MAT', work: 'STD', project: '', date: '', tiers: '', article: '', detail: '', etape: '', qty: '', unit: '', price: '', amount: '', note: '', sbon: '', btotal: '', mode: 'V', locked: false, more: false } };
       var leaveHook = null;
       body.appendChild(tabsBox);
       body.appendChild(area);
@@ -2873,7 +2906,7 @@ details.more>*+*{margin-top:10px}
       function load() {
         area.textContent = '';
         I.refresher(function () { load(); });
-        ({ caisses: tabCaisses, charges: tabCharges, versements: tabVersements, transfers: tabTransfers, mine: tabMine })[current]();
+        ({ caisses: tabCaisses, charges: tabCharges, versements: tabVersements, transfers: tabTransfers, goods: tabGoods, mine: tabMine })[current]();
         if (!area.querySelector('.skel')) I.skel(area);
       }
 
@@ -3068,6 +3101,42 @@ details.more>*+*{margin-top:10px}
         });
         leaveHook = function () { try { sync(); } catch (e) {} };
 
+        // الدفعات المفتوحة لطرف في مشروع منذ آخر تسوية: من سجلّك ومن الأسطر المنتظرة في الطابور (التسوية تُغلق الدورة)
+        function iso(n) { return '\u2066' + money(n) + '\u2069'; }   // الأرقام لا تنقلب داخل النص العربي
+        function priorFor(project, tiers) {
+          if (!project || !tiers) return null;
+          var key = U.norm(tiers), sum = 0;
+          S.items.filter(function (c) { return c.active && c.pay_mode && c.project_id === project && U.norm(c.tiers) === key; })
+            .sort(function (a, b) { return a.id < b.id ? -1 : 1; })
+            .forEach(function (c) { if (c.pay_mode === 'R') sum = 0; else sum += Number(c.amount) || 0; });
+          qItems().forEach(function (q) {
+            if ((q.status === 'pending' || q.status === 'sending') && q.line.project_id === project && U.norm(q.line.tiers) === key) {
+              if (q.line.pay_mode === 'R') sum = 0; else sum += Number(q.line.amount) || 0;
+            }
+          });
+          return Math.round(sum * 100) / 100;
+        }
+        function refreshPrior() {
+          if (!W.priorEl) return;
+          var rule = S.opts.rules[V.kind];
+          var pr = W.project ? W.project.get() : V.project, tr = W.tiers ? W.tiers.get() : '';
+          var pv = priorFor(pr, tr);
+          V._prior = pv;
+          W.priorEl.textContent = pv === null ? 'اختر المشروع و' + tl(rule.tiersList) + ' لتظهر الدفعات السابقة' : 'الدفعات السابقة لهذا ' + tl(rule.tiersList) + ' في هذا المشروع (بغضّ النظر عن المرحلة): ' + iso(pv) + ' دج';
+          if (V.mode === 'R') recalcR();
+        }
+        function recalcR() {
+          if (V.mode !== 'R' || !W.btotal || !W.restEl) return;
+          var bt = W.btotal.get(), pv = V._prior || 0;
+          W.amount.input.readOnly = true;
+          if (!isFinite(bt) || bt <= 0) { W.amount.set(''); W.restEl.textContent = 'أدخل مبلغ الوصل: يُحسب المبلغ المدفوع الآن تلقائيًا'; W.restEl.className = 'restline muted'; return; }
+          var rest = Math.round((bt - pv) * 100) / 100;
+          if (rest < 0) { W.amount.set(''); W.restEl.textContent = '⚠ الدفعات السابقة (' + iso(pv) + ') تتجاوز مبلغ الوصل'; W.restEl.className = 'restline neg'; return; }
+          W.amount.set(rest);
+          W.restEl.textContent = 'المبلغ المدفوع الآن = ' + iso(bt) + ' − ' + iso(pv) + ' = ' + iso(rest) + ' دج';
+          W.restEl.className = 'restline';
+        }
+        function tl(list) { return list === 'macon' ? 'المعلّم' : (list === 'ouvrier' ? 'العامل' : 'المورد'); }
         function strItems(arr) { return arr.map(function (s) { return { id: s, label: s }; }); }
         function sync() {   // يقرأ الأدوات إلى V قبل إعادة بناء الجزء المتغير
           if (W.project) V.project = W.project.get();
@@ -3082,17 +3151,18 @@ details.more>*+*{margin-top:10px}
           if (W.amount) V.amount = W.amount.get();
           V.note = W.note ? W.note.value : V.note;
           V.sbon = W.sbon ? W.sbon.value : V.sbon;
+          if (W.btotal) { var bt0 = W.btotal.get(); V.btotal = isFinite(bt0) && bt0 > 0 ? bt0 : ''; }
         }
         function num(x) { return (typeof x === 'number' && isFinite(x)) ? x : ''; }
 
         function autoAmount() {
-          if (!W.qty || !W.price) return;
+          if (V.mode === 'R' || !W.qty || !W.price) return;
           var q = Number(W.qty.value), p = W.price.get();
           if (q > 0 && p > 0) { W.amount.set(Math.round(q * p * 100) / 100); W.amount.input.readOnly = true; }
           else { W.amount.input.readOnly = false; }
         }
 
-        var KIND_ICON = { MAT: '🧱', LOC: '🚜', OUV: '👷', MAC: '🔨', SST: '🏗️' };
+        var KIND_ICON = { MAT: '🧱', LOC: '🚜', OUV: '🔨', MAC: '👷', SST: '🏗️' };
         function kindName(id) { return (S.opts.kinds.filter(function (k) { return k.id === id; })[0] || { label: '' }).label; }
         function plainField(text, node) { return h('div', { class: 'fld' }, [h('span', { class: 'lbl', text: text }), node]); }
 
@@ -3107,7 +3177,7 @@ details.more>*+*{margin-top:10px}
             V.kind = k; buildPanel();
           });
           W.work = U.chips(o.work_types, V.work, function (w) { V.work = w; });
-          W.project = U.combo(o.projects.map(function (p) { return { id: p.id, label: p.name, sub: p.id }; }), { value: V.project, placeholder: 'اكتب اسم الزبون أو الموقع...' });
+          W.project = U.combo(o.projects.map(function (p) { return { id: p.id, label: p.name, sub: p.id }; }), { value: V.project, placeholder: 'اكتب اسم الزبون أو الموقع...', onChange: function () { refreshPrior(); } });
           W.date = U.dateField(V.date || undefined);
           W.etape = U.combo(strItems(o.lists.etape), { value: V.etape, placeholder: 'اكتب أول حرف...', allowNew: true });
           var grid = [];
@@ -3126,8 +3196,8 @@ details.more>*+*{margin-top:10px}
             if (o.projects.length > 1 || !V.project) grid.push(I.field('المشروع *', W.project.node));
             grid.push(I.field('المرحلة *', W.etape.node));
             if (rule.tiersList) {
-              W.tiers = U.combo(strItems(o.lists[rule.tiersList]), { value: V.tiers, placeholder: 'اكتب أول حرف...', allowNew: true });
-              grid.push(I.field(rule.tiersList === 'macon' ? 'المعلّم *' : 'المورد *', W.tiers.node));
+              W.tiers = U.combo(strItems(o.lists[rule.tiersList]), { value: V.tiers, placeholder: 'اكتب أول حرف...', allowNew: true, other: true, onChange: function () { refreshPrior(); } });
+              grid.push(I.field(tl(rule.tiersList) + ' *', W.tiers.node));
             }
           }
           if (hdr) grid.push(I.field('المرحلة *', W.etape.node));
@@ -3156,16 +3226,20 @@ details.more>*+*{margin-top:10px}
           }
           W.amount = U.moneyField(V.amount);
           W.note = h('input', { type: 'text', maxlength: '300', placeholder: 'اختياري', value: V.note });
-          W.sbon = h('input', { type: 'text', maxlength: '40', placeholder: 'اختياري — رقم وصل المورد إن وُجد', value: V.sbon });
+          var isR = V.mode === 'R';
+          W.mode = U.chips([{ id: 'V', label: 'دفعة (Versement)' }, { id: 'R', label: 'تسوية (Règlement)' }], V.mode, function (m) { sync(); V.mode = m; if (m === 'V') { V.sbon = ''; V.btotal = ''; } buildPanel(); });
+          W.priorEl = h('small', { class: 'muted priorline' });
+          W.restEl = h('small', { class: 'restline' });
+          var rbox = null;
+          if (isR) {
+            W.sbon = h('input', { type: 'text', maxlength: '40', placeholder: 'رقم وصل المورد', value: V.sbon });
+            W.btotal = U.moneyField(V.btotal);
+            W.btotal.input.addEventListener('input', recalcR);
+            rbox = h('div', { class: 'rbox' }, [h('div', { class: 'form-grid' }, [I.field('رقم الوصل *', W.sbon), I.field('مبلغ الوصل (DA) *', W.btotal.node)]), W.restEl]);
+          }
 
           panel.appendChild(h('div', { class: 'ph' }, [h('h4', { text: 'مصروف جديد' }), kname, W.kind.node]));
           if (!isAdmin && S.balance !== null) panel.appendChild(h('div', { class: 'balmini' }, ['رصيد صندوقي: ', h('b', { class: S.balance < 0 ? 'neg' : '', text: money(S.balance) + ' DA' })]));
-          var fq = frequent();
-          if (fq.length) {
-            panel.appendChild(h('div', { class: 'quick' }, [h('span', { class: 'muted', text: 'شائعة:' })].concat(fq.map(function (c) {
-              return h('button', { type: 'button', class: 'pill', text: [c.article, c.tiers].filter(Boolean).join(' · '), onclick: function () { useFrequent(c); } });
-            }))));
-          }
           var gridEl = h('div', { class: 'form-grid' }, grid);
           var amountEl = h('div', { class: 'form-grid amountrow' }, [I.field('المبلغ (DA) *', W.amount.node)]);
           // الترتيب: التاريخ · المشروع · المرحلة · المورد · الوصل (تلقائي) · [تفاصيل مخفية] · المبلغ · نوع الأشغال · ملاحظة
@@ -3180,17 +3254,19 @@ details.more>*+*{margin-top:10px}
             moreBtn.textContent = moreBox.hidden ? '＋ تفاصيل المادة (اختياري)' : '－ إخفاء التفاصيل';
             if (!moreBox.hidden) { var f = moreBox.querySelector('input'); if (f) f.focus(); }
           } });
-          var fieldsEl = h('div', { class: 'fgroup' }, [hdr, gridEl, rcpt, I.field('وصل المورد (اختياري)', W.sbon), moreItems.length ? moreBtn : null, moreItems.length ? moreBox : null, amountEl, extra]);
+          var modeBox = h('div', { class: 'paymode' }, [W.priorEl, h('div', { class: 'inl' }, [h('span', { class: 'lbl', text: 'نوع العملية' }), W.mode.node]), rbox]);
+          var fieldsEl = h('div', { class: 'fgroup' }, [hdr, gridEl, rcpt, moreItems.length ? moreBtn : null, moreItems.length ? moreBox : null, amountEl, modeBox, extra]);
           panel.appendChild(fieldsEl);
           panel.appendChild(h('div', { class: 'toolbar' }, [
             W.save = h('button', { type: 'button', class: 'btn btn-primary btn-big', text: 'حفظ المصروف', onclick: submit })
           ]));
           panel.appendChild(statusNode);
-          U.enterNext(fieldsEl, function (e) { if (e && e.target === W.amount.input) submit(); else W.amount.input.focus(); });
+          U.enterNext(fieldsEl, function (e) { if (V.mode === 'R' || (e && e.target === W.amount.input)) submit(); else W.amount.input.focus(); });
           panel.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); submit(); }
           });
           autoAmount();
+          refreshPrior();
         }
 
         // عند اختيار المادة: نملأ الوحدة والسعر من آخر مرة اشتريتها (إن كانت الخانات فارغة)
@@ -3236,7 +3312,7 @@ details.more>*+*{margin-top:10px}
         }
 
         function lineText(l) {
-          return [l.tiers, l.article, l.detail, l.etape].filter(Boolean).join(' · ') || kindName(l.kind).split(' (')[0];
+          return ([l.tiers, l.article, l.detail, l.etape].filter(Boolean).join(' · ') || kindName(l.kind).split(' (')[0]) + (l.pay_mode === 'R' ? ' — تسوية الوصل ' + (l.supplier_bon || '') : '');
         }
 
         // يضيف عنصرًا جديدًا (كتبه المهندس) إلى القائمة المحلية ليظهر في الخيارات من السطر التالي
@@ -3253,14 +3329,21 @@ details.more>*+*{margin-top:10px}
           try {
             if (!V.project) throw new Error('اختر المشروع');
             if (!String(V.etape || '').trim()) throw new Error('اختر المرحلة');
-            if (rule.tiersList && !V.tiers) throw new Error(rule.tiersList === 'macon' ? 'اختر المعلّم' : 'اختر المورد');
+            if (rule.tiersList && !V.tiers) throw new Error('اختر ' + (rule.tiersList === 'macon' ? 'المعلّم' : rule.tiersList === 'ouvrier' ? 'العامل' : 'المورد'));
             var amount = V.amount;
-            if (!(amount > 0)) throw new Error('أدخل المبلغ');
+            if (V.mode === 'R') {   // تسوية: المبلغ المدفوع الآن = مبلغ الوصل − الدفعات السابقة
+              if (!String(V.sbon || '').trim()) throw new Error('أدخل رقم الوصل');
+              if (!(Number(V.btotal) > 0)) throw new Error('أدخل مبلغ الوصل');
+              var pv0 = priorFor(V.project, V.tiers) || 0;
+              if (pv0 > Number(V.btotal)) throw new Error('الدفعات السابقة (' + iso(pv0) + ') تتجاوز مبلغ الوصل');
+              amount = Math.round((Number(V.btotal) - pv0) * 100) / 100;
+            } else if (!(amount > 0)) throw new Error('أدخل المبلغ');
           } catch (e) { I.toast(e.message, 'error'); return false; }
           var line = {
             kind: V.kind, work_type: V.work, project_id: V.project, op_date: V.date,
             tiers: V.tiers, article: V.article, detail: V.detail, etape: V.etape,
-            qty: Number(V.qty) > 0 ? V.qty : '', unit: V.unit, unit_price: V.price > 0 ? V.price : '', amount: V.amount, note: V.note, supplier_bon: String(V.sbon || '').trim()
+            qty: Number(V.qty) > 0 ? V.qty : '', unit: V.unit, unit_price: V.price > 0 ? V.price : '', amount: amount, note: V.note, supplier_bon: V.mode === 'R' ? String(V.sbon || '').trim() : '',
+            pay_mode: V.mode, bon_total: V.mode === 'R' ? Number(V.btotal) : ''
           };
           if (!rule.qty) { line.qty = ''; line.unit = ''; line.unit_price = ''; }
           var key = JSON.stringify(line), items = qItems();
@@ -3271,7 +3354,7 @@ details.more>*+*{margin-top:10px}
           });
           learn(rule.tiersList, line.tiers); learn('article', line.article); learn('detail', line.detail); learn('etape', line.etape);
           // نفرّغ ما يتجدد في كل سطر ونُبقي المشروع والتاريخ والمورد والمرحلة؛ والرأس (المشروع/المورد) يُطوى في شريط صغير
-          V.article = ''; V.detail = ''; V.qty = ''; V.unit = ''; V.price = ''; V.amount = ''; V.note = ''; V.sbon = '';
+          V.article = ''; V.detail = ''; V.qty = ''; V.unit = ''; V.price = ''; V.amount = ''; V.note = ''; V.sbon = ''; V.btotal = ''; V.mode = 'V';   // بعد التسوية نعود إلى «دفعة» افتراضيًا
           V.locked = false;   // الحقول الثابتة تبقى ظاهرة بقيمها السابقة وقابلة للتعديل (لا تُطوى في شريط)
           qPersist();
           buildPanel();
@@ -3362,8 +3445,8 @@ details.more>*+*{margin-top:10px}
           if (!rows.length) tb.appendChild(h('tr', {}, [h('td', { colspan: '8', class: 'empty', text: 'لا توجد مصاريف' })]));
           rows.forEach(function (c) {
             tb.appendChild(h('tr', { class: c.active ? '' : 'off' }, [
-              h('td', { text: c.op_date }), h('td', {}, [h('b', { class: 'bonno', text: c.id }), c.supplier_bon ? h('small', { text: ' وصل المورد: ' + c.supplier_bon }) : null]), h('td', { text: c.project_name }),
-              h('td', { text: c.kind_label.split(' ')[0] + (c.work_type === 'SUP' ? ' (إضافي)' : '') }),
+              h('td', { text: c.op_date }), h('td', {}, [h('b', { class: 'bonno', text: c.id }), c.supplier_bon ? h('small', { text: ' وصل المورد: ' + c.supplier_bon + (c.pay_mode === 'R' ? ' · مبلغ الوصل: ' + iso(c.bon_total) + ' · دفعات سابقة: ' + iso(c.prior_paid) : '') }) : null]), h('td', { text: c.project_name }),
+              h('td', { text: c.kind_label.split(' ')[0] + (c.work_type === 'SUP' ? ' (إضافي)' : '') + (c.pay_label ? ' — ' + c.pay_label : '') }),
               h('td', { text: lineText(c) + (c.qty && c.unit_price ? ' — ' + c.qty + (c.unit ? ' ' + c.unit : '') + ' × ' + money(c.unit_price) : '') }),
               h('td', { text: money(c.amount) }),
               h('td', { text: c.engineer_name }),
@@ -3395,8 +3478,8 @@ details.more>*+*{margin-top:10px}
             } }),
             h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'تصدير Excel', onclick: function () {
               var rows = visible();
-              U.exportCsv('المصاريف', ['التاريخ', 'رقم الوصل', 'وصل المورد', 'المشروع', 'النوع', 'البيان', 'الكمية', 'الوحدة', 'سعر الوحدة', 'المبلغ', 'الصندوق', 'الحالة'],
-                rows.map(function (c) { return [c.op_date, c.id, c.supplier_bon, c.project_name, c.kind_label, lineText(c), c.qty, c.unit, c.unit_price, c.amount, c.engineer_name, c.active ? 'ساري' : 'ملغى: ' + c.void_reason]; }), F.eng || undefined);
+              U.exportCsv('المصاريف', ['التاريخ', 'رقم الوصل', 'وصل المورد', 'نوع العملية', 'مبلغ الوصل', 'دفعات سابقة', 'المشروع', 'النوع', 'البيان', 'الكمية', 'الوحدة', 'سعر الوحدة', 'المبلغ', 'الصندوق', 'الحالة'],
+                rows.map(function (c) { return [c.op_date, c.id, c.supplier_bon, c.pay_label, c.bon_total, c.prior_paid, c.project_name, c.kind_label, lineText(c), c.qty, c.unit, c.unit_price, c.amount, c.engineer_name, c.active ? 'ساري' : 'ملغى: ' + c.void_reason]; }), F.eng || undefined);
             } })
           ]));
           histBox.appendChild(wrapTable(['التاريخ', 'رقم الوصل', 'المشروع', 'النوع', 'البيان', 'المبلغ', 'الصندوق', ''], tb));
@@ -3543,6 +3626,76 @@ details.more>*+*{margin-top:10px}
       }
 
       /* ---------- التحويلات ---------- */
+      /* ---------- نقل السلع بين المشاريع ---------- */
+      function tabGoods() {
+        var me = I.user().id;
+        var state = { items: [], opts: { from: [], to: [] } };
+        var tb = h('tbody', {});
+        var count = h('span', { class: 'muted' });
+        function replace(g) { state.items = state.items.map(function (x) { return x.id === g.id ? g : x; }); draw(); }
+        function askReason(title, label, fn) {
+          var reason = h('input', { type: 'text', maxlength: '200', required: true });
+          I.modal({ title: title, content: formCard([I.field(label, reason)]), onSubmit: function () { return fn(reason.value); } });
+        }
+        function openNew() {
+          var from = U.combo(state.opts.from.map(function (p) { return { id: p.id, label: p.name, sub: p.engineer }; }), { placeholder: 'اختر مشروعك المصدر...', value: state.opts.from.length === 1 ? state.opts.from[0].id : '' });
+          var to = U.combo(state.opts.to.map(function (p) { return { id: p.id, label: p.name, sub: p.engineer, eng: p.engineer_id }; }), { placeholder: 'اختر المشروع المستلم...' });
+          var date = U.dateField();
+          var bon = h('input', { type: 'text', maxlength: '40', placeholder: 'رقم الوصل' });
+          var amount = U.moneyField();
+          var obs = h('input', { type: 'text', maxlength: '300', placeholder: 'اختياري' });
+          I.modal({
+            title: 'نقل سلعة إلى مشروع مهندس آخر',
+            content: formCard([I.field('من المشروع *', from.node), I.field('إلى المشروع *', to.node), I.field('التاريخ', date.node), I.field('رقم الوصل *', bon), I.field('قيمة السلعة (DA) *', amount.node), I.field('ملاحظة', obs)]),
+            submitLabel: 'إرسال للقبول',
+            onSubmit: function () {
+              if (!from.get()) throw new Error('اختر المشروع المصدر');
+              if (!to.get()) throw new Error('اختر المشروع المستلم');
+              if (from.get() === to.get()) throw new Error('اختر مشروعين مختلفين');
+              var fp = state.opts.from.filter(function (p) { return p.id === from.get(); })[0], tp = state.opts.to.filter(function (p) { return p.id === to.get(); })[0];
+              if (fp && tp && fp.engineer_id === tp.engineer_id) throw new Error('النقل بين مشروعين لمهندسين مختلفين فقط');
+              if (!bon.value.trim()) throw new Error('أدخل رقم الوصل');
+              var a = amount.get(); if (!(a > 0)) throw new Error('أدخل قيمة السلعة');
+              return I.rpc('goods.create', { from_project_id: from.get(), to_project_id: to.get(), op_date: date.get(), bon_no: bon.value, amount: a, observation: obs.value })
+                .then(function (g) { state.items.unshift(g); draw(); I.toast('أُرسل إلى ' + g.to_engineer + ' للقبول، وتم تنبيه المدير'); });
+            }
+          });
+        }
+        function draw() {
+          count.textContent = state.items.length + ' عملية';
+          tb.textContent = '';
+          if (!state.items.length) tb.appendChild(h('tr', {}, [h('td', { colspan: '7', class: 'empty', text: 'لا توجد عمليات نقل سلع' })]));
+          state.items.forEach(function (g) {
+            var acts = [];
+            if (g.status === 'PENDING') {
+              if (g.to_engineer_id === me) {
+                acts.push(h('button', { type: 'button', class: 'btn btn-primary btn-sm', text: 'قبول', onclick: function () {
+                  I.rpc('goods.decide', { id: g.id, decision: 'ACCEPT' }).then(function (u) { replace(u); I.toast('قُبلت السلعة وانتقلت تكلفتها إلى مشروعك'); }).catch(fail);
+                } }));
+                acts.push(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'رفض', onclick: function () {
+                  askReason('رفض السلعة ' + g.id, 'سبب الرفض *', function (r) { return I.rpc('goods.decide', { id: g.id, decision: 'REFUSE', reason: r }).then(function (u) { replace(u); I.toast('تم الرفض'); }); });
+                } }));
+              }
+              if (isAdmin || g.from_engineer_id === me) acts.push(h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'سحب', onclick: function () {
+                I.rpc('goods.cancel', { id: g.id }).then(function (u) { replace(u); I.toast('سُحبت العملية'); }).catch(fail);
+              } }));
+            } else if (g.reason) acts.push(h('small', { class: 'muted', text: g.reason }));
+            tb.appendChild(h('tr', { class: g.status === 'PENDING' || g.status === 'ACCEPTED' ? '' : 'off' }, [
+              h('td', {}, [h('b', { text: g.id }), h('small', { text: ' وصل: ' + g.bon_no })]), h('td', { text: g.op_date }),
+              h('td', {}, [h('b', { text: g.from_project }), h('small', { text: ' ' + g.from_engineer })]),
+              h('td', {}, [h('b', { text: g.to_project }), h('small', { text: ' ' + g.to_engineer })]),
+              h('td', { text: money(g.amount) }),
+              h('td', {}, [h('span', { class: 'badge ' + (STATUS_CLASS[g.status] || ''), text: g.status_label }), g.observation ? h('small', { text: ' ' + g.observation }) : null]),
+              h('td', { class: 'actions' }, acts)
+            ]));
+          });
+        }
+        area.appendChild(h('div', { class: 'muted', style: 'margin:0 0 8px', text: 'ينقل المهندس سلعة فائضة من أحد مشاريعه إلى مشروع مهندس آخر: تنتقل تكلفتها بين المشروعين عند قبول المستلم، ولا تتأثر الصناديق.' }));
+        area.appendChild(h('div', { class: 'toolbar' }, [count, h('span', { class: 'spacer' }), h('button', { class: 'btn btn-primary', type: 'button', text: '+ نقل سلعة', onclick: openNew })]));
+        area.appendChild(wrapTable(['الرقم / الوصل', 'التاريخ', 'من مشروع', 'إلى مشروع', 'القيمة', 'الحالة', ''], tb));
+        Promise.all([I.rpc('goods.list'), I.rpc('goods.options')]).then(function (r) { state.items = r[0]; state.opts = r[1]; draw(); }).catch(fail);
+      }
+
       function tabTransfers() {
         var state = { items: [], engineers: [] };
         var tb = h('tbody', {});
@@ -3772,7 +3925,7 @@ details.more>*+*{margin-top:10px}
       steps: [
         ['projects', 'مشاريعي', 'قسم «المشاريع» يعرض المشاريع المسندة إليك فقط. اضغط «فتح» لرؤية المصاريف وتوزيعها وتقدم المرحلة.'],
         ['caisses', 'طلب مبلغ', 'من «الصناديق والخزينة» تبويب «صندوقي» اضغط «+ طلب مبلغ». يصلك المبلغ في صندوقك بعد اعتماد الإدارة.'],
-        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) ثم التاريخ والمشروع والمرحلة (إلزامية) والمورد، وأدخل المبلغ، واضغط «حفظ المصروف». رقم الوصل يُنشأ تلقائيًا. إن أردت تسجيل المادة والكمية والسعر اضغط «＋ تفاصيل المادة (اختياري)». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اكتبه واختر «+ إضافة». الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي، ويمكنك كتابة «وصل المورد» إن وُجد. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
+        ['finance', 'تسجيل مصروف', 'من تبويب «المصاريف»: اختر النوع (الأيقونة) ثم التاريخ والمشروع والمرحلة (إلزامية) والمورد، وأدخل المبلغ، واضغط «حفظ المصروف». رقم الوصل يُنشأ تلقائيًا. إن أردت تسجيل المادة والكمية والسعر اضغط «＋ تفاصيل المادة (اختياري)». يظهر السطر فورًا في «أسطر هذه الجلسة» ويُحفظ في الخلفية، فواصل بالسطر التالي دون انتظار. إن لم تجد المورد أو المادة في القائمة اختر «أخرى…» أو اكتبه ثم «+ إضافة». تحت المبلغ ترى «الدفعات السابقة» لهذا المورد في المشروع، ثم تختار «دفعة (Versement)» لكل دفعة، وعند تصفية الحساب «تسوية (Règlement)»: أدخل رقم الوصل ومبلغه الكامل فيُحسب المبلغ المدفوع الآن تلقائيًا (مبلغ الوصل − الدفعات السابقة). لنقل سلعة فائضة إلى مشروع مهندس آخر استعمل تبويب «نقل السلع»؛ تُنقل التكلفة عند قبول المهندس المستلم. الأسطر التي لم تُحفظ بسبب انقطاع الشبكة تبقى في هاتفك وتُرسل تلقائيًا. لكل مصروف رقم وصل تلقائي. وعند قبول المكتب لطلب مبلغ يظهر لك إشعار في الشاشة الرئيسية: اضغط «تأكيد الاستلام».'],
         ['clock', 'متابعة الطلبات', 'تبويب «طلبات المبالغ» يعرض حالة كل طلب: بالانتظار أو معتمد أو مرفوض.'],
         ['guide', 'كشف حسابي', 'في تبويب «صندوقي» اضغط «طباعة / PDF» للحصول على كشف بحركات صندوقك بشعار المكتب.']
       ],
@@ -3820,6 +3973,6 @@ details.more>*+*{margin-top:10px}
 </script>
 
 
-<script src="pwa.js?v=0.18.3"></script>
+<script src="pwa.js?v=0.20.0"></script>
 </body>
 </html>
