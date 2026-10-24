@@ -1575,7 +1575,7 @@ details.more>*+*{margin-top:10px}
   }
 
   /* ---------- money ---------- */
-  function groupDigits(intPart) { return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  function groupDigits(intPart) { return intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0'); }
   function moneyField(value) {
     var input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', placeholder: '0', required: true });
     var AR = '٠١٢٣٤٥٦٧٨٩';
