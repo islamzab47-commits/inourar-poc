@@ -105,7 +105,13 @@
     var T = I().toast;
     if (iosNeedsInstall) { T('على آيفون: اضغط زر المشاركة في Safari ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من الأيقونة ثم فعّل الإشعارات', 'big', 9000); return; }
     if (!('Notification' in window)) { T('هذا المتصفح لا يدعم الإشعارات', 'error'); return; }
-    if (Notification.permission === 'granted') { T('الإشعارات مفعّلة على هذا الجهاز ✔', 'ok'); enable(true).catch(function () {}); return; }
+    if (Notification.permission === 'granted') {
+      T('جارٍ إرسال إشعار تجريبي…', 'ok', 3000);
+      enable(true).then(function () { return I().rpc('push.test', {}, { mode: 'silent' }); })
+        .then(function () { T('أُرسل إشعار تجريبي ✔ إن لم يصلك خلال ثوانٍ فالمشكلة في إعدادات الجهاز', 'big', 9000); })
+        .catch(function (e) { T('فشل الإرسال: ' + ((e && e.message) || 'تعذّر تفعيل الإشعارات'), 'error', 12000); });
+      return;
+    }
     if (Notification.permission === 'denied') { T('الإشعارات محجوبة. فعّلها من إعدادات الموقع في المتصفح ثم أعد المحاولة', 'error', 7000); return; }
     Notification.requestPermission().then(function (p) {
       paintBtn();
